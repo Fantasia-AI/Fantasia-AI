@@ -157,7 +157,7 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
         with gr.Column(scale=1):
             model_name = gr.Radio(
                 choices=list(LLM_MODELS.keys()),
-                value="Default",
+                value="Cohere c4ai-crp-08-2024",  # 기본값을 Cohere 모델로 명시적 지정
                 label="최신 LLM 모델 선택",
                 info="사용할 LLM 모델을 선택하세요"
             )
