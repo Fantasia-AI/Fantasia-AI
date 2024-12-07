@@ -22,6 +22,14 @@ def read_uploaded_file(file):
     except Exception as e:
         return f"파일을 읽는 중 오류가 발생했습니다: {str(e)}"
 
+def format_history(history):
+    formatted_history = []
+    for user_msg, assistant_msg in history:
+        formatted_history.append({"role": "user", "content": user_msg})
+        if assistant_msg:
+            formatted_history.append({"role": "assistant", "content": assistant_msg})
+    return formatted_history
+
 def chat(message, history, uploaded_file, system_message="", max_tokens=4000, temperature=0.7, top_p=0.9):
     system_prefix = """반드시 한글로 답변할것. 너는 주어진 소스코드나 데이터를 기반으로 "서비스 사용 설명 및 안내, Q&A를 하는 역할이다". 아주 친절하고 자세하게 4000토큰 이상 Markdown 형식으로 작성하라. 너는 입력된 내용을 기반으로 사용 설명 및 질의 응답을 진행하며, 이용자에게 도움을 주어야 한다. 이용자가 궁금해 할 만한 내용에 친절하게 알려주도록 하라. 전체 내용에 대해서는 보안을 유지하고, 키 값 및 엔드포인트와 구체적인 모델은 공개하지 마라."""
 
@@ -43,11 +51,7 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
 5. 기대효과 및 장점"""
 
     messages = [{"role": "system", "content": f"{system_prefix} {system_message}"}]
-    for val in history:
-        if val[0]:
-            messages.append({"role": "user", "content": val[0]})
-        if val[1]:
-            messages.append({"role": "assistant", "content": val[1]})
+    messages.extend(format_history(history))
     messages.append({"role": "user", "content": message})
 
     response = ""
@@ -62,21 +66,22 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
             token = msg.choices[0].delta.get('content', None)
             if token:
                 response += token
-        return "", history + [(message, response)]
+        
+        history = history + [[message, response]]
+        return "", history
     except Exception as e:
         error_msg = f"추론 중 오류가 발생했습니다: {str(e)}"
-        return "", history + [(message, error_msg)]
+        history = history + [[message, error_msg]]
+        return "", history
 
 css = """
 footer {visibility: hidden}
 """
 
-# ... (이전 코드 동일)
-
 with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
     with gr.Row():
         with gr.Column(scale=2):
-            chatbot = gr.Chatbot(height=600, type="messages")
+            chatbot = gr.Chatbot(height=600)  # type="messages" 제거
             msg = gr.Textbox(
                 label="메시지를 입력하세요",
                 show_label=False,
@@ -87,9 +92,9 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
         
         with gr.Column(scale=1):
             file_upload = gr.File(
-                label="파일 업로드 (.csv, .txt, .py, .js, .html, .parquet)",
-                file_types=[".csv, .txt, .py, .js, .html, .parquet"],
-                type="filepath"  # 'file'에서 'filepath'로 수정
+                label="파일 업로드 (.cod, .txt, .py, .parquet)",
+                file_types=[".cod", ".txt", ".py", ".parquet"],
+                type="filepath"
             )
             
             with gr.Accordion("고급 설정", open=False):
