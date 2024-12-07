@@ -15,20 +15,38 @@ LLM_MODELS = {
 def get_client(model_name):
     return InferenceClient(LLM_MODELS[model_name], token=os.getenv("HF_TOKEN"))
 
+def analyze_file_content(content, file_type):
+    """파일 내용을 분석하여 1줄 요약을 반환"""
+    if file_type == 'parquet':
+        return f"데이터셋 분석: {content.count('|')-1}개 컬럼의 데이터 테이블"
+    
+    # 텍스트 파일의 경우
+    lines = content.split('\n')
+    total_lines = len(lines)
+    non_empty_lines = len([line for line in lines if line.strip()])
+    
+    if 'def ' in content or 'class ' in content:
+        functions = len([line for line in lines if 'def ' in line])
+        classes = len([line for line in lines if 'class ' in line])
+        return f"코드 분석: {total_lines}줄의 Python 코드 ({functions}개 함수, {classes}개 클래스 포함)"
+    else:
+        return f"텍스트 분석: {total_lines}줄의 텍스트 문서 (유효 내용 {non_empty_lines}줄)"
+
 def read_uploaded_file(file):
     if file is None:
-        return ""
+        return "", ""
     try:
         if file.name.endswith('.parquet'):
             df = pd.read_parquet(file.name, engine='pyarrow')
-            return df.head(10).to_markdown(index=False)
+            content = df.head(10).to_markdown(index=False)
+            return content, "parquet"
         else:
             content = file.read()
             if isinstance(content, bytes):
-                return content.decode('utf-8')
-            return content
+                content = content.decode('utf-8')
+            return content, "text"
     except Exception as e:
-        return f"파일을 읽는 중 오류가 발생했습니다: {str(e)}"
+        return f"파일을 읽는 중 오류가 발생했습니다: {str(e)}", "error"
 
 def format_history(history):
     formatted_history = []
@@ -39,19 +57,25 @@ def format_history(history):
     return formatted_history
 
 def chat(message, history, uploaded_file, model_name, system_message="", max_tokens=4000, temperature=0.7, top_p=0.9):
-    system_prefix = """반드시 한글로 답변할것. 너는 주어진 소스코드나 데이터를 기반으로 "서비스 사용 설명 및 안내, Q&A를 하는 역할이다". 아주 친절하고 자세하게 4000토큰 이상 Markdown 형식으로 작성하라. 너는 입력된 내용을 기반으로 사용 설명 및 질의 응답을 진행하며, 이용자에게 도움을 주어야 한다. 이용자가 궁금해 할 만한 내용에 친절하게 알려주도록 하라. 전체 내용에 대해서는 보안을 유지하고, 키 값 및 엔드포인트와 구체적인 모델은 공개하지 마라."""
+    system_prefix = """반드시 한글로 답변할것. 너는 주어진 소스코드나 데이터를 기반으로 "서비스 사용 설명 및 안내, Q&A를 하는 역할이다". 아주 친절하고 자세하게 4000토큰 이상 Markdown 형식으로 작성하라. 너는 입력된 내용을 기반으로 사용 설명 및 질의 응답을 진행하며, 이용자에게 도움을 주어야 한다."""
 
     if uploaded_file:
-        content = read_uploaded_file(uploaded_file)
-        file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+        content, file_type = read_uploaded_file(uploaded_file)
+        if file_type == "error":
+            return "", history + [[message, content]]
         
-        if file_extension == '.parquet':
+        # 파일 내용 분석 및 요약
+        file_summary = analyze_file_content(content, file_type)
+        
+        if file_type == 'parquet':
             system_message += f"\n\n파일 내용:\n```markdown\n{content}\n```"
         else:
             system_message += f"\n\n파일 내용:\n```python\n{content}\n```"
             
         if message == "파일 분석을 시작합니다.":
-            message = """업로드된 파일을 분석하여 다음 내용을 포함하여 상세히 설명하라:
+            message = f"""[파일 요약] {file_summary}
+
+다음 내용을 포함하여 상세히 설명하라:
 1. 파일의 주요 목적과 기능
 2. 주요 특징과 구성요소
 3. 활용 방법 및 사용 시나리오
@@ -86,7 +110,6 @@ def chat(message, history, uploaded_file, model_name, system_message="", max_tok
 css = """
 footer {visibility: hidden}
 """
-# ... (이전 코드 동일)
 
 with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
     with gr.Row():
@@ -101,7 +124,7 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
             clear = gr.ClearButton([msg, chatbot])
         
         with gr.Column(scale=1):
-            model_name = gr.Dropdown(
+            model_name = gr.Radio(
                 choices=list(LLM_MODELS.keys()),
                 value="Default",
                 label="LLM 모델 선택",
@@ -110,7 +133,7 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
             
             file_upload = gr.File(
                 label="파일 업로드",
-                file_types=["text", ".parquet"],  # 파일 타입 수정
+                file_types=["text", ".parquet"],
                 type="filepath"
             )
             
@@ -119,8 +142,6 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
                 max_tokens = gr.Slider(minimum=1, maximum=8000, value=4000, label="Max Tokens")
                 temperature = gr.Slider(minimum=0, maximum=1, value=0.7, label="Temperature")
                 top_p = gr.Slider(minimum=0, maximum=1, value=0.9, label="Top P")
-
-
 
     # 이벤트 바인딩
     msg.submit(
