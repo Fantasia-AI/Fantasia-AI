@@ -1,11 +1,9 @@
 import gradio as gr
-from transformers import pipeline
+from huggingface_hub import InferenceClient
 import os
-from typing import List, Tuple, Generator
-import concurrent.futures
+from typing import List, Tuple
 
 # Hugging Face 토큰 설정
-os.environ["TOKENIZERS_PARALLELISM"] = "false"  # 경고 메시지 방지
 HF_TOKEN = os.getenv("HF_TOKEN")
 
 # Available LLM models
@@ -26,18 +24,11 @@ DEFAULT_MODELS = [
     "mistralai/Mistral-Nemo-Instruct-2407"
 ]
 
-# Pipeline 초기화
-pipes = {}
-for model_name in LLM_MODELS.values():
-    try:
-        pipes[model_name] = pipeline(
-            "text-generation",
-            model=model_name,
-            token=HF_TOKEN,
-            device_map="auto"
-        )
-    except Exception as e:
-        print(f"Failed to load model {model_name}: {str(e)}")
+# Initialize clients with token
+clients = {
+    model: InferenceClient(model, token=HF_TOKEN) 
+    for model in LLM_MODELS.values()
+}
 
 def process_file(file) -> str:
     if file is None:
@@ -46,7 +37,15 @@ def process_file(file) -> str:
         return file.read().decode('utf-8')
     return f"Uploaded file: {file.name}"
 
-def format_messages(message: str, history: List[Tuple[str, str]], system_message: str) -> List[dict]:
+def respond_single(
+    client,
+    message: str,
+    history: List[Tuple[str, str]],
+    system_message: str,
+    max_tokens: int,
+    temperature: float,
+    top_p: float,
+):
     messages = [{"role": "system", "content": system_message}]
     
     for user, assistant in history:
@@ -56,35 +55,18 @@ def format_messages(message: str, history: List[Tuple[str, str]], system_message
             messages.append({"role": "assistant", "content": assistant})
     
     messages.append({"role": "user", "content": message})
-    return messages
-
-def generate_response(
-    pipe,
-    messages: List[dict],
-    max_tokens: int,
-    temperature: float,
-    top_p: float
-) -> Generator[str, None, None]:
+    
+    response = ""
     try:
-        formatted_prompt = "\n".join([f"{msg['role']}: {msg['content']}" for msg in messages])
-        
-        response = pipe(
-            formatted_prompt,
+        for msg in client.text_generation(
+            prompt=message,
             max_new_tokens=max_tokens,
+            stream=True,
             temperature=temperature,
             top_p=top_p,
-            do_sample=True,
-            pad_token_id=50256,
-            num_return_sequences=1,
-            streaming=True
-        )
-        
-        generated_text = ""
-        for output in response:
-            new_text = output[0]['generated_text'][len(formatted_prompt):].strip()
-            generated_text = new_text
-            yield generated_text
-            
+        ):
+            response += msg
+            yield response
     except Exception as e:
         yield f"Error: {str(e)}"
 
@@ -99,7 +81,7 @@ def respond_all(
     max_tokens: int,
     temperature: float,
     top_p: float,
-) -> Tuple[Generator[str, None, None], Generator[str, None, None], Generator[str, None, None]]:
+):
     if file:
         file_content = process_file(file)
         message = f"{message}\n\nFile content:\n{file_content}"
@@ -107,15 +89,24 @@ def respond_all(
     while len(selected_models) < 3:
         selected_models.append(selected_models[-1])
 
-    def generate(pipe, history):
-        messages = format_messages(message, history, system_message)
-        return generate_response(pipe, messages, max_tokens, temperature, top_p)
+    def generate(client, history):
+        return respond_single(
+            client,
+            message,
+            history,
+            system_message,
+            max_tokens,
+            temperature,
+            top_p,
+        )
 
     return (
-        generate(pipes[selected_models[0]], history1),
-        generate(pipes[selected_models[1]], history2),
-        generate(pipes[selected_models[2]], history3),
+        generate(clients[selected_models[0]], history1),
+        generate(clients[selected_models[1]], history2),
+        generate(clients[selected_models[2]], history3),
     )
+
+
 
 css = """
 footer {
@@ -126,6 +117,7 @@ footer {
 
         
 with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
+
     with gr.Row():
         model_choices = gr.Checkboxgroup(
             choices=list(LLM_MODELS.values()),
@@ -212,7 +204,7 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
     )
 
 if __name__ == "__main__":
-    # Hugging Face 토큰이 설정되어 있는지 확인
     if not HF_TOKEN:
         print("Warning: HF_TOKEN environment variable is not set")
     demo.launch()
+
