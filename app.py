@@ -17,11 +17,13 @@ def get_client(model_name):
 
 def analyze_file_content(content, file_type):
     """파일 내용을 분석하여 구조적 요약을 반환"""
-    if file_type == 'parquet':
+    if file_type in ['parquet', 'csv']:
         try:
-            # Parquet 파일 구조 분석
-            columns = content.split('\n')[0].count('|') - 1
-            rows = content.count('\n') - 2  # 헤더와 구분선 제외
+            # 데이터셋 구조 분석
+            lines = content.split('\n')
+            header = lines[0]
+            columns = header.count('|') - 1
+            rows = len(lines) - 3  # 헤더와 구분선 제외
             return f"데이터셋 구조: {columns}개 컬럼, {rows}개 데이터 샘플"
         except:
             return "데이터셋 구조 분석 실패"
@@ -31,14 +33,12 @@ def analyze_file_content(content, file_type):
     total_lines = len(lines)
     non_empty_lines = len([line for line in lines if line.strip()])
     
-    # 코드 파일 특징 분석
     if any(keyword in content.lower() for keyword in ['def ', 'class ', 'import ', 'function']):
         functions = len([line for line in lines if 'def ' in line])
         classes = len([line for line in lines if 'class ' in line])
         imports = len([line for line in lines if 'import ' in line or 'from ' in line])
         return f"코드 구조 분석: 총 {total_lines}줄 (함수 {functions}개, 클래스 {classes}개, 임포트 {imports}개)"
     
-    # 일반 텍스트 문서 분석
     paragraphs = content.count('\n\n') + 1
     words = len(content.split())
     return f"문서 구조 분석: 총 {total_lines}줄, {paragraphs}개 문단, 약 {words}개 단어"
@@ -47,14 +47,23 @@ def read_uploaded_file(file):
     if file is None:
         return "", ""
     try:
-        if file.name.endswith('.parquet'):
+        file_ext = os.path.splitext(file.name)[1].lower()
+        
+        if file_ext == '.parquet':
             df = pd.read_parquet(file.name, engine='pyarrow')
             content = df.head(10).to_markdown(index=False)
             return content, "parquet"
+        elif file_ext == '.csv':
+            df = pd.read_csv(file.name)
+            content = f"데이터 미리보기:\n{df.head(10).to_markdown(index=False)}\n\n"
+            content += f"\n데이터 정보:\n"
+            content += f"- 총 행 수: {len(df)}\n"
+            content += f"- 총 열 수: {len(df.columns)}\n"
+            content += f"- 컬럼 목록: {', '.join(df.columns)}\n"
+            return content, "csv"
         else:
-            content = file.read()
-            if isinstance(content, bytes):
-                content = content.decode('utf-8')
+            with open(file.name, 'r', encoding='utf-8') as f:
+                content = f.read()
             return content, "text"
     except Exception as e:
         return f"파일을 읽는 중 오류가 발생했습니다: {str(e)}", "error"
@@ -73,8 +82,10 @@ def chat(message, history, uploaded_file, model_name, system_message="", max_tok
 1. 파일의 전반적인 구조와 구성
 2. 주요 내용과 패턴 분석
 3. 데이터의 특징과 의미
+   - 데이터셋의 경우: 컬럼의 의미, 데이터 타입, 값의 분포
+   - 텍스트/코드의 경우: 구조적 특징, 주요 패턴
 4. 잠재적 활용 방안
-5. 주의해야 할 점이나 개선 가능한 부분
+5. 데이터 품질 및 개선 가능한 부분
 
 전문가적 관점에서 상세하고 구조적인 분석을 제공하되, 이해하기 쉽게 설명하세요. 분석 결과는 Markdown 형식으로 작성하고, 가능한 한 구체적인 예시를 포함하세요."""
 
@@ -87,7 +98,7 @@ def chat(message, history, uploaded_file, model_name, system_message="", max_tok
         # 파일 내용 분석 및 구조적 요약
         file_summary = analyze_file_content(content, file_type)
         
-        if file_type == 'parquet':
+        if file_type in ['parquet', 'csv']:
             system_message += f"\n\n파일 내용:\n```markdown\n{content}\n```"
         else:
             system_message += f"\n\n파일 내용:\n```\n{content}\n```"
@@ -152,8 +163,8 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
             )
             
             file_upload = gr.File(
-                label="파일 업로드 (텍스트, 코드, 데이터 파일)",
-                file_types=["text", ".parquet"],
+                label="파일 업로드 (텍스트, 코드, CSV, Parquet 파일)",
+                file_types=["text", ".csv", ".parquet"],
                 type="filepath"
             )
             
