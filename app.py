@@ -7,13 +7,9 @@ from typing import List, Tuple
 # LLM 모델 정의
 LLM_MODELS = {
     "Default": "CohereForAI/c4ai-command-r-plus-08-2024",  # 기본 모델
-    "Mistral": "mistralai/Mistral-7B-Instruct-v0.2",
-    "Zephyr": "HuggingFaceH4/zephyr-7b-beta",
-    "OpenChat": "openchat/openchat-3.5",
-    "Llama2": "meta-llama/Llama-2-7b-chat-hf",
-    "Phi": "microsoft/phi-2",
-    "Neural": "nvidia/neural-chat-7b-v3-1",
-    "Starling": "HuggingFaceH4/starling-lm-7b-alpha"
+    "Meta": "meta-llama/Llama-3.3-70B-Instruct",    
+    "Mistral": "mistralai/Mistral-Nemo-Instruct-2407",
+    "Alibaba": "Qwen/QwQ-32B-Preview"
 }
 
 def get_client(model_name):
