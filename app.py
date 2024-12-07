@@ -87,35 +87,80 @@ footer {
 """
 
 
-# Gradio 인터페이스 설정
-demo = gr.ChatInterface(
-    respond,
-    additional_inputs=[
-        gr.File(label="Fashion Code File", file_types=[".cod", ".txt", ".py"]),
-        gr.File(label="UHD Image Code File", file_types=[".cod", ".txt", ".py"]),
-        gr.File(label="MixGEN Code File", file_types=[".cod", ".txt", ".py"]),
-        gr.File(label="Parquet File", file_types=[".parquet"]),
-        gr.Textbox(label="System Message", value=""),
-        gr.Slider(minimum=1, maximum=8000, value=4000, label="Max Tokens"),
-        gr.Slider(minimum=0, maximum=1, value=0.7, label="Temperature"),
-        gr.Slider(minimum=0, maximum=1, value=0.9, label="Top P"),
-    ],
-    examples=[
-        ["패션 코드 실행"],
-        ["UHD 이미지 코드 실행"],
-        ["MixGEN 코드 실행"],
-        ["test.parquet 실행"],
-        ["상세한 사용 방법을 마치 화면을 보면서 설명하듯이 4000 토큰 이상 자세히 설명하라"],
-        ["FAQ 20건을 상세하게 작성하라. 4000토큰 이상 사용하라."],
-        ["사용 방법과 차별점, 특징, 강점을 중심으로 4000 토큰 이상 유튜브 영상 스크립트 형태로 작성하라"],
-        ["본 서비스를 SEO 최적화하여 블로그 포스트로 4000 토큰 이상 작성하라"],
-        ["특허 출원에 활용할 기술 및 비즈니스모델 측면을 포함하여 특허 출원서 구성에 맞게 작성하라"],
-        ["계속 이어서 답변하라"],
-    ],
-    theme="Yntec/HaleyCH_Theme_Orange",
-    css=css,
-    cache_examples=False,
-)
+# ... (이전 import 문과 함수들은 동일)
+
+with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
+    with gr.Row():
+        with gr.Column(scale=2):
+            chatbot = gr.Chatbot()
+            msg = gr.Textbox(label="메시지를 입력하세요")
+            clear = gr.ClearButton([msg, chatbot])
+        
+        with gr.Column(scale=1):
+            with gr.Group():
+                fashion_file = gr.File(label="Fashion Code File", file_types=[".cod", ".txt", ".py"])
+                fashion_analyze = gr.Button("패션 코드 분석")
+                
+                uhd_file = gr.File(label="UHD Image Code File", file_types=[".cod", ".txt", ".py"])
+                uhd_analyze = gr.Button("UHD 이미지 코드 분석")
+                
+                mixgen_file = gr.File(label="MixGEN Code File", file_types=[".cod", ".txt", ".py"])
+                mixgen_analyze = gr.Button("MixGEN 코드 분석")
+                
+                parquet_file = gr.File(label="Parquet File", file_types=[".parquet"])
+                parquet_analyze = gr.Button("Parquet 파일 분석")
+            
+            with gr.Accordion("고급 설정", open=False):
+                system_message = gr.Textbox(label="System Message", value="")
+                max_tokens = gr.Slider(minimum=1, maximum=8000, value=4000, label="Max Tokens")
+                temperature = gr.Slider(minimum=0, maximum=1, value=0.7, label="Temperature")
+                top_p = gr.Slider(minimum=0, maximum=1, value=0.9, label="Top P")
+
+    # 분석 버튼 클릭 이벤트 핸들러
+    def analyze_file(file_type):
+        if file_type == "fashion":
+            return "패션 코드 실행"
+        elif file_type == "uhd":
+            return "UHD 이미지 코드 실행"
+        elif file_type == "mixgen":
+            return "MixGEN 코드 실행"
+        elif file_type == "parquet":
+            return "test.parquet 실행"
+
+    # 채팅 제출 핸들러
+    def chat(message, history):
+        return respond(
+            message=message,
+            history=history,
+            fashion_file=fashion_file.value,
+            uhd_file=uhd_file.value,
+            mixgen_file=mixgen_file.value,
+            parquet_file=parquet_file.value,
+            system_message=system_message.value,
+            max_tokens=max_tokens.value,
+            temperature=temperature.value,
+            top_p=top_p.value,
+        )
+
+    # 이벤트 바인딩
+    msg.submit(chat, [msg, chatbot], [msg, chatbot])
+    fashion_analyze.click(lambda: analyze_file("fashion"), None, msg)
+    uhd_analyze.click(lambda: analyze_file("uhd"), None, msg)
+    mixgen_analyze.click(lambda: analyze_file("mixgen"), None, msg)
+    parquet_analyze.click(lambda: analyze_file("parquet"), None, msg)
+
+    # 예제 추가
+    gr.Examples(
+        examples=[
+            ["상세한 사용 방법을 마치 화면을 보면서 설명하듯이 4000 토큰 이상 자세히 설명하라"],
+            ["FAQ 20건을 상세하게 작성하라. 4000토큰 이상 사용하라."],
+            ["사용 방법과 차별점, 특징, 강점을 중심으로 4000 토큰 이상 유튜브 영상 스크립트 형태로 작성하라"],
+            ["본 서비스를 SEO 최적화하여 블로그 포스트로 4000 토큰 이상 작성하라"],
+            ["특허 출원에 활용할 기술 및 비즈니스모델 측면을 포함하여 특허 출원서 구성에 맞게 작성하라"],
+            ["계속 이어서 답변하라"],
+        ],
+        inputs=msg,
+    )
 
 if __name__ == "__main__":
     demo.launch()
