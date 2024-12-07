@@ -109,8 +109,7 @@ Provide detailed and structured analysis from an expert perspective, but explain
     if uploaded_file:
         content, file_type = read_uploaded_file(uploaded_file)
         if file_type == "error":
-            yield "", history + [[message, content]]
-            return
+            return "", [{"role": "user", "content": message}, {"role": "assistant", "content": content}]
         
         file_summary = analyze_file_content(content, file_type)
         
@@ -131,7 +130,13 @@ Please provide detailed analysis from these perspectives:
 6. 🎯 Practical applications and recommendations"""
 
     messages = [{"role": "system", "content": f"{system_prefix} {system_message}"}]
-    messages.extend(format_history(history))
+    
+    # Convert history to message format
+    for h in history:
+        messages.append({"role": "user", "content": h[0]})
+        if h[1]:
+            messages.append({"role": "assistant", "content": h[1]})
+    
     messages.append({"role": "user", "content": message})
 
     try:
@@ -148,11 +153,18 @@ Please provide detailed analysis from these perspectives:
             token = msg.choices[0].delta.get('content', None)
             if token:
                 partial_message += token
-                yield "", history + [[message, partial_message]]
+                new_history = history + [[message, partial_message]]
+                formatted_history = []
+                for h in new_history:
+                    formatted_history.append({"role": "user", "content": h[0]})
+                    if h[1]:
+                        formatted_history.append({"role": "assistant", "content": h[1]})
+                yield "", formatted_history
                 
     except Exception as e:
         error_msg = f"❌ Inference error: {str(e)}"
-        yield "", history + [[message, error_msg]]
+        formatted_history = history + [[message, error_msg]]
+        yield "", [{"role": "user", "content": h[0], "role": "assistant", "content": h[1]} for h in formatted_history]
 
 css = """
 footer {visibility: hidden}
