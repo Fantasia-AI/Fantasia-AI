@@ -9,3 +9,4 @@ pillow
 markdown
 python-multipart
 httpx
+transformers
