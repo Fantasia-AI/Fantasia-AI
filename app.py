@@ -132,16 +132,21 @@ Please provide detailed analysis from these perspectives:
     messages = [{"role": "system", "content": f"{system_prefix} {system_message}"}]
     
     # Convert history to message format
-    for h in history:
-        messages.append({"role": "user", "content": h[0]})
-        if h[1]:
-            messages.append({"role": "assistant", "content": h[1]})
-    
+    if history is not None:
+        for item in history:
+            if isinstance(item, dict):
+                messages.append(item)
+            elif isinstance(item, (list, tuple)) and len(item) == 2:
+                messages.append({"role": "user", "content": item[0]})
+                if item[1]:
+                    messages.append({"role": "assistant", "content": item[1]})
+
     messages.append({"role": "user", "content": message})
 
     try:
         client = get_client(model_name)
         partial_message = ""
+        current_history = []
         
         for msg in client.chat_completion(
             messages,
@@ -153,18 +158,19 @@ Please provide detailed analysis from these perspectives:
             token = msg.choices[0].delta.get('content', None)
             if token:
                 partial_message += token
-                new_history = history + [[message, partial_message]]
-                formatted_history = []
-                for h in new_history:
-                    formatted_history.append({"role": "user", "content": h[0]})
-                    if h[1]:
-                        formatted_history.append({"role": "assistant", "content": h[1]})
-                yield "", formatted_history
+                current_history = [
+                    {"role": "user", "content": message},
+                    {"role": "assistant", "content": partial_message}
+                ]
+                yield "", current_history
                 
     except Exception as e:
         error_msg = f"❌ Inference error: {str(e)}"
-        formatted_history = history + [[message, error_msg]]
-        yield "", [{"role": "user", "content": h[0], "role": "assistant", "content": h[1]} for h in formatted_history]
+        error_history = [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": error_msg}
+        ]
+        yield "", error_history
 
 css = """
 footer {visibility: hidden}
