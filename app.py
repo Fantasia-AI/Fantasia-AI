@@ -82,6 +82,13 @@ def respond(
     except Exception as e:
         yield f"추론 중 오류가 발생했습니다: {str(e)}"
 
+css = """
+footer {
+    visibility: hidden;
+}
+"""
+
+
 # Gradio 인터페이스 설정
 demo = gr.ChatInterface(
     respond,
@@ -107,7 +114,8 @@ demo = gr.ChatInterface(
         ["특허 출원에 활용할 기술 및 비즈니스모델 측면을 포함하여 특허 출원서 구성에 맞게 작성하라"],
         ["계속 이어서 답변하라"],
     ],
-    theme="Nymbo/Nymbo_Theme",
+    theme="Yntec/HaleyCH_Theme_Orange",
+    css=css,
     cache_examples=False,
 )
 
