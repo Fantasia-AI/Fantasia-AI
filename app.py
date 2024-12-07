@@ -92,8 +92,8 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
         
         with gr.Column(scale=1):
             file_upload = gr.File(
-                label="파일 업로드 (.cod, .txt, .py, .parquet)",
-                file_types=[".cod", ".txt", ".py", ".parquet"],
+                label="파일 업로드 (.csv, .txt, .py, .parquet)",
+                file_types=[".csv", ".txt", ".py", ".parquet"],
                 type="filepath"
             )
             
