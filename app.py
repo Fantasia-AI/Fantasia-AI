@@ -54,17 +54,41 @@ def read_uploaded_file(file):
             content = df.head(10).to_markdown(index=False)
             return content, "parquet"
         elif file_ext == '.csv':
-            df = pd.read_csv(file.name)
-            content = f"데이터 미리보기:\n{df.head(10).to_markdown(index=False)}\n\n"
-            content += f"\n데이터 정보:\n"
-            content += f"- 총 행 수: {len(df)}\n"
-            content += f"- 총 열 수: {len(df.columns)}\n"
-            content += f"- 컬럼 목록: {', '.join(df.columns)}\n"
-            return content, "csv"
+            # CSV 파일 읽기 시 다양한 인코딩 시도
+            encodings = ['utf-8', 'cp949', 'euc-kr', 'latin1']
+            for encoding in encodings:
+                try:
+                    df = pd.read_csv(file.name, encoding=encoding)
+                    content = f"데이터 미리보기:\n{df.head(10).to_markdown(index=False)}\n\n"
+                    content += f"\n데이터 정보:\n"
+                    content += f"- 총 행 수: {len(df)}\n"
+                    content += f"- 총 열 수: {len(df.columns)}\n"
+                    content += f"- 컬럼 목록: {', '.join(df.columns)}\n"
+                    # 데이터 타입 정보 추가
+                    content += f"\n컬럼별 데이터 타입:\n"
+                    for col, dtype in df.dtypes.items():
+                        content += f"- {col}: {dtype}\n"
+                    # 결측치 정보 추가
+                    null_counts = df.isnull().sum()
+                    if null_counts.any():
+                        content += f"\n결측치 정보:\n"
+                        for col, null_count in null_counts[null_counts > 0].items():
+                            content += f"- {col}: {null_count}개\n"
+                    return content, "csv"
+                except UnicodeDecodeError:
+                    continue
+            raise UnicodeDecodeError(f"지원되는 인코딩({', '.join(encodings)})으로 파일을 읽을 수 없습니다.")
         else:
-            with open(file.name, 'r', encoding='utf-8') as f:
-                content = f.read()
-            return content, "text"
+            # 텍스트 파일 읽기 시도
+            encodings = ['utf-8', 'cp949', 'euc-kr', 'latin1']
+            for encoding in encodings:
+                try:
+                    with open(file.name, 'r', encoding=encoding) as f:
+                        content = f.read()
+                    return content, "text"
+                except UnicodeDecodeError:
+                    continue
+            raise UnicodeDecodeError(f"지원되는 인코딩({', '.join(encodings)})으로 파일을 읽을 수 없습니다.")
     except Exception as e:
         return f"파일을 읽는 중 오류가 발생했습니다: {str(e)}", "error"
 
