@@ -4,8 +4,20 @@ import os
 import pandas as pd
 from typing import List, Tuple
 
-# 추론 API 클라이언트 설정
-hf_client = InferenceClient("CohereForAI/c4ai-command-r-plus-08-2024", token=os.getenv("HF_TOKEN"))
+# LLM 모델 정의
+LLM_MODELS = {
+    "Default": "CohereForAI/c4ai-command-r-plus-08-2024",  # 기본 모델
+    "Mistral": "mistralai/Mistral-7B-Instruct-v0.2",
+    "Zephyr": "HuggingFaceH4/zephyr-7b-beta",
+    "OpenChat": "openchat/openchat-3.5",
+    "Llama2": "meta-llama/Llama-2-7b-chat-hf",
+    "Phi": "microsoft/phi-2",
+    "Neural": "nvidia/neural-chat-7b-v3-1",
+    "Starling": "HuggingFaceH4/starling-lm-7b-alpha"
+}
+
+def get_client(model_name):
+    return InferenceClient(LLM_MODELS[model_name], token=os.getenv("HF_TOKEN"))
 
 def read_uploaded_file(file):
     if file is None:
@@ -30,7 +42,7 @@ def format_history(history):
             formatted_history.append({"role": "assistant", "content": assistant_msg})
     return formatted_history
 
-def chat(message, history, uploaded_file, system_message="", max_tokens=4000, temperature=0.7, top_p=0.9):
+def chat(message, history, uploaded_file, model_name, system_message="", max_tokens=4000, temperature=0.7, top_p=0.9):
     system_prefix = """반드시 한글로 답변할것. 너는 주어진 소스코드나 데이터를 기반으로 "서비스 사용 설명 및 안내, Q&A를 하는 역할이다". 아주 친절하고 자세하게 4000토큰 이상 Markdown 형식으로 작성하라. 너는 입력된 내용을 기반으로 사용 설명 및 질의 응답을 진행하며, 이용자에게 도움을 주어야 한다. 이용자가 궁금해 할 만한 내용에 친절하게 알려주도록 하라. 전체 내용에 대해서는 보안을 유지하고, 키 값 및 엔드포인트와 구체적인 모델은 공개하지 마라."""
 
     if uploaded_file:
@@ -56,7 +68,8 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
 
     response = ""
     try:
-        for msg in hf_client.chat_completion(
+        client = get_client(model_name)
+        for msg in client.chat_completion(
             messages,
             max_tokens=max_tokens,
             stream=True,
@@ -81,7 +94,7 @@ footer {visibility: hidden}
 with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
     with gr.Row():
         with gr.Column(scale=2):
-            chatbot = gr.Chatbot(height=600)  # type="messages" 제거
+            chatbot = gr.Chatbot(height=600)
             msg = gr.Textbox(
                 label="메시지를 입력하세요",
                 show_label=False,
@@ -91,6 +104,13 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
             clear = gr.ClearButton([msg, chatbot])
         
         with gr.Column(scale=1):
+            model_name = gr.Dropdown(
+                choices=list(LLM_MODELS.keys()),
+                value="Default",
+                label="LLM 모델 선택",
+                info="사용할 LLM 모델을 선택하세요"
+            )
+            
             file_upload = gr.File(
                 label="파일 업로드 (.csv, .txt, .py, .parquet)",
                 file_types=[".csv", ".txt", ".py", ".parquet"],
@@ -106,14 +126,14 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
     # 이벤트 바인딩
     msg.submit(
         chat,
-        inputs=[msg, chatbot, file_upload, system_message, max_tokens, temperature, top_p],
+        inputs=[msg, chatbot, file_upload, model_name, system_message, max_tokens, temperature, top_p],
         outputs=[msg, chatbot]
     )
 
     # 파일 업로드 시 자동 분석
     file_upload.change(
         chat,
-        inputs=[gr.Textbox(value="파일 분석을 시작합니다."), chatbot, file_upload, system_message, max_tokens, temperature, top_p],
+        inputs=[gr.Textbox(value="파일 분석을 시작합니다."), chatbot, file_upload, model_name, system_message, max_tokens, temperature, top_p],
         outputs=[msg, chatbot]
     )
 
