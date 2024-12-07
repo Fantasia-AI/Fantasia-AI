@@ -16,21 +16,32 @@ def get_client(model_name):
     return InferenceClient(LLM_MODELS[model_name], token=os.getenv("HF_TOKEN"))
 
 def analyze_file_content(content, file_type):
-    """파일 내용을 분석하여 1줄 요약을 반환"""
+    """파일 내용을 분석하여 구조적 요약을 반환"""
     if file_type == 'parquet':
-        return f"데이터셋 분석: {content.count('|')-1}개 컬럼의 데이터 테이블"
+        try:
+            # Parquet 파일 구조 분석
+            columns = content.split('\n')[0].count('|') - 1
+            rows = content.count('\n') - 2  # 헤더와 구분선 제외
+            return f"데이터셋 구조: {columns}개 컬럼, {rows}개 데이터 샘플"
+        except:
+            return "데이터셋 구조 분석 실패"
     
-    # 텍스트 파일의 경우
+    # 텍스트/코드 파일의 경우
     lines = content.split('\n')
     total_lines = len(lines)
     non_empty_lines = len([line for line in lines if line.strip()])
     
-    if 'def ' in content or 'class ' in content:
+    # 코드 파일 특징 분석
+    if any(keyword in content.lower() for keyword in ['def ', 'class ', 'import ', 'function']):
         functions = len([line for line in lines if 'def ' in line])
         classes = len([line for line in lines if 'class ' in line])
-        return f"코드 분석: {total_lines}줄의 Python 코드 ({functions}개 함수, {classes}개 클래스 포함)"
-    else:
-        return f"텍스트 분석: {total_lines}줄의 텍스트 문서 (유효 내용 {non_empty_lines}줄)"
+        imports = len([line for line in lines if 'import ' in line or 'from ' in line])
+        return f"코드 구조 분석: 총 {total_lines}줄 (함수 {functions}개, 클래스 {classes}개, 임포트 {imports}개)"
+    
+    # 일반 텍스트 문서 분석
+    paragraphs = content.count('\n\n') + 1
+    words = len(content.split())
+    return f"문서 구조 분석: 총 {total_lines}줄, {paragraphs}개 문단, 약 {words}개 단어"
 
 def read_uploaded_file(file):
     if file is None:
@@ -57,38 +68,49 @@ def format_history(history):
     return formatted_history
 
 def chat(message, history, uploaded_file, model_name, system_message="", max_tokens=4000, temperature=0.7, top_p=0.9):
-    system_prefix = """반드시 한글로 답변할것. 너는 주어진 소스코드나 데이터를 기반으로 "서비스 사용 설명 및 안내, Q&A를 하는 역할이다". 아주 친절하고 자세하게 4000토큰 이상 Markdown 형식으로 작성하라. 너는 입력된 내용을 기반으로 사용 설명 및 질의 응답을 진행하며, 이용자에게 도움을 주어야 한다."""
+    system_prefix = """너는 파일 분석 전문가입니다. 업로드된 파일의 내용을 깊이 있게 분석하여 다음과 같은 관점에서 설명해야 합니다:
+
+1. 파일의 전반적인 구조와 구성
+2. 주요 내용과 패턴 분석
+3. 데이터의 특징과 의미
+4. 잠재적 활용 방안
+5. 주의해야 할 점이나 개선 가능한 부분
+
+전문가적 관점에서 상세하고 구조적인 분석을 제공하되, 이해하기 쉽게 설명하세요. 분석 결과는 Markdown 형식으로 작성하고, 가능한 한 구체적인 예시를 포함하세요."""
 
     if uploaded_file:
         content, file_type = read_uploaded_file(uploaded_file)
         if file_type == "error":
-            return "", history + [[message, content]]
+            yield "", history + [[message, content]]
+            return
         
-        # 파일 내용 분석 및 요약
+        # 파일 내용 분석 및 구조적 요약
         file_summary = analyze_file_content(content, file_type)
         
         if file_type == 'parquet':
             system_message += f"\n\n파일 내용:\n```markdown\n{content}\n```"
         else:
-            system_message += f"\n\n파일 내용:\n```python\n{content}\n```"
+            system_message += f"\n\n파일 내용:\n```\n{content}\n```"
             
         if message == "파일 분석을 시작합니다.":
-            message = f"""[파일 요약] {file_summary}
+            message = f"""[구조 분석] {file_summary}
 
-다음 내용을 포함하여 상세히 설명하라:
-1. 파일의 주요 목적과 기능
-2. 주요 특징과 구성요소
-3. 활용 방법 및 사용 시나리오
-4. 주의사항 및 제한사항
-5. 기대효과 및 장점"""
+다음 관점에서 상세 분석을 제공해주세요:
+1. 파일의 전반적인 구조와 형식
+2. 주요 내용 및 구성요소 분석
+3. 데이터/내용의 특징과 패턴
+4. 품질 및 완성도 평가
+5. 개선 가능한 부분 제안
+6. 실제 활용 방안 및 추천사항"""
 
     messages = [{"role": "system", "content": f"{system_prefix} {system_message}"}]
     messages.extend(format_history(history))
     messages.append({"role": "user", "content": message})
 
-    response = ""
     try:
         client = get_client(model_name)
+        partial_message = ""
+        
         for msg in client.chat_completion(
             messages,
             max_tokens=max_tokens,
@@ -98,14 +120,12 @@ def chat(message, history, uploaded_file, model_name, system_message="", max_tok
         ):
             token = msg.choices[0].delta.get('content', None)
             if token:
-                response += token
-        
-        history = history + [[message, response]]
-        return "", history
+                partial_message += token
+                yield "", history + [[message, partial_message]]
+                
     except Exception as e:
         error_msg = f"추론 중 오류가 발생했습니다: {str(e)}"
-        history = history + [[message, error_msg]]
-        return "", history
+        yield "", history + [[message, error_msg]]
 
 css = """
 footer {visibility: hidden}
@@ -132,7 +152,7 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
             )
             
             file_upload = gr.File(
-                label="파일 업로드",
+                label="파일 업로드 (텍스트, 코드, 데이터 파일)",
                 file_types=["text", ".parquet"],
                 type="filepath"
             )
@@ -147,25 +167,31 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
     msg.submit(
         chat,
         inputs=[msg, chatbot, file_upload, model_name, system_message, max_tokens, temperature, top_p],
-        outputs=[msg, chatbot]
+        outputs=[msg, chatbot],
+        queue=True
+    ).then(
+        lambda: gr.update(interactive=True),
+        None,
+        [msg]
     )
 
     # 파일 업로드 시 자동 분석
     file_upload.change(
         chat,
         inputs=[gr.Textbox(value="파일 분석을 시작합니다."), chatbot, file_upload, model_name, system_message, max_tokens, temperature, top_p],
-        outputs=[msg, chatbot]
+        outputs=[msg, chatbot],
+        queue=True
     )
 
     # 예제 추가
     gr.Examples(
         examples=[
-            ["상세한 사용 방법을 마치 화면을 보면서 설명하듯이 4000 토큰 이상 자세히 설명하라"],
-            ["FAQ 20건을 상세하게 작성하라. 4000토큰 이상 사용하라."],
-            ["사용 방법과 차별점, 특징, 강점을 중심으로 4000 토큰 이상 유튜브 영상 스크립트 형태로 작성하라"],
-            ["본 서비스를 SEO 최적화하여 블로그 포스트로 4000 토큰 이상 작성하라"],
-            ["특허 출원에 활용할 기술 및 비즈니스모델 측면을 포함하여 특허 출원서 구성에 맞게 작성하라"],
-            ["계속 이어서 답변하라"],
+            ["파일의 전반적인 구조와 특징을 자세히 설명해주세요."],
+            ["이 파일의 주요 패턴과 특징을 분석해주세요."],
+            ["파일의 품질과 개선 가능한 부분을 평가해주세요."],
+            ["이 파일을 실제로 어떻게 활용할 수 있을까요?"],
+            ["파일의 주요 내용을 요약하고 핵심 인사이트를 도출해주세요."],
+            ["이전 분석을 이어서 더 자세히 설명해주세요."],
         ],
         inputs=msg,
     )
