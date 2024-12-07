@@ -6,10 +6,10 @@ from typing import List, Tuple
 
 # LLM 모델 정의
 LLM_MODELS = {
-    "Default": "CohereForAI/c4ai-command-r-plus-08-2024",  # 기본 모델
-    "Meta": "meta-llama/Llama-3.3-70B-Instruct",    
-    "Mistral": "mistralai/Mistral-Nemo-Instruct-2407",
-    "Alibaba": "Qwen/QwQ-32B-Preview"
+    "Cohere c4ai-crp-08-2024": "CohereForAI/c4ai-command-r-plus-08-2024",  # 기본 모델
+    "Meta Llama3.3-70B": "meta-llama/Llama-3.3-70B-Instruct",    
+    "Mistral Nemo 2407": "mistralai/Mistral-Nemo-Instruct-2407",
+    "Alibaba Qwen QwQ-32B": "Qwen/QwQ-32B-Preview"
 }
 
 def get_client(model_name):
@@ -158,7 +158,7 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
             model_name = gr.Radio(
                 choices=list(LLM_MODELS.keys()),
                 value="Default",
-                label="LLM 모델 선택",
+                label="최신 LLM 모델 선택",
                 info="사용할 LLM 모델을 선택하세요"
             )
             
