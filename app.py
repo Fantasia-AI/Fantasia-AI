@@ -90,6 +90,7 @@ def chat(message, history, uploaded_file, model_name, system_message="", max_tok
 css = """
 footer {visibility: hidden}
 """
+# ... (이전 코드 동일)
 
 with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
     with gr.Row():
@@ -112,8 +113,8 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
             )
             
             file_upload = gr.File(
-                label="파일 업로드 (.csv, .txt, .py, .parquet)",
-                file_types=[".csv", ".txt", ".py", ".parquet"],
+                label="파일 업로드",
+                file_types=["text", ".parquet"],  # 파일 타입 수정
                 type="filepath"
             )
             
@@ -122,6 +123,8 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
                 max_tokens = gr.Slider(minimum=1, maximum=8000, value=4000, label="Max Tokens")
                 temperature = gr.Slider(minimum=0, maximum=1, value=0.7, label="Temperature")
                 top_p = gr.Slider(minimum=0, maximum=1, value=0.9, label="Top P")
+
+
 
     # 이벤트 바인딩
     msg.submit(
