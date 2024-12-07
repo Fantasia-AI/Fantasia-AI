@@ -175,7 +175,7 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css, title="EveryChat �
             chatbot = gr.Chatbot(
                 height=600, 
                 label="Chat Interface 💬",
-                type="messages"  # 경고 해결을 위해 type 지정
+                type="messages"
             )
             msg = gr.Textbox(
                 label="Type your message",
@@ -184,7 +184,7 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css, title="EveryChat �
                 container=False
             )
             with gr.Row():
-                clear = gr.ClearButton([msg, chatbot])  # label 제거
+                clear = gr.ClearButton([msg, chatbot])
                 send = gr.Button("Send 📤")
         
         with gr.Column(scale=1):
@@ -195,9 +195,9 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css, title="EveryChat �
                 info="Choose your preferred AI model"
             )
             
+            gr.Markdown("### Upload File 📁\nSupport: Text, Code, CSV, Parquet files")
             file_upload = gr.File(
-                label="Upload File 📁",
-                info="Support: Text, Code, CSV, Parquet files",
+                label="Upload File",
                 file_types=["text", ".csv", ".parquet"],
                 type="filepath"
             )
@@ -220,7 +220,7 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css, title="EveryChat �
         [msg]
     )
 
-    send.click(  # 전송 버튼 이벤트 추가
+    send.click(
         chat,
         inputs=[msg, chatbot, file_upload, model_name, system_message, max_tokens, temperature, top_p],
         outputs=[msg, chatbot],
