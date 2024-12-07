@@ -117,7 +117,15 @@ def respond_all(
         generate(pipes[selected_models[2]], history3),
     )
 
-with gr.Blocks() as demo:
+css = """
+footer {
+    visibility: hidden;
+}
+"""
+
+
+        
+with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
     with gr.Row():
         model_choices = gr.Checkboxgroup(
             choices=list(LLM_MODELS.values()),
