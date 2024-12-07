@@ -158,6 +158,8 @@ css = """
 footer {visibility: hidden}
 """
 
+# ... (이전 코드 동일)
+
 with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css, title="EveryChat 🤖") as demo:
     gr.HTML(
         """
@@ -170,14 +172,20 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css, title="EveryChat �
     
     with gr.Row():
         with gr.Column(scale=2):
-            chatbot = gr.Chatbot(height=600, label="Chat Interface 💬")
+            chatbot = gr.Chatbot(
+                height=600, 
+                label="Chat Interface 💬",
+                type="messages"  # 경고 해결을 위해 type 지정
+            )
             msg = gr.Textbox(
                 label="Type your message",
                 show_label=False,
                 placeholder="Ask me anything about the uploaded file... 💭",
                 container=False
             )
-            clear = gr.ClearButton([msg, chatbot], label="Clear Chat 🗑️")
+            with gr.Row():
+                clear = gr.ClearButton([msg, chatbot])  # label 제거
+                send = gr.Button("Send 📤")
         
         with gr.Column(scale=1):
             model_name = gr.Radio(
@@ -212,6 +220,17 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css, title="EveryChat �
         [msg]
     )
 
+    send.click(  # 전송 버튼 이벤트 추가
+        chat,
+        inputs=[msg, chatbot, file_upload, model_name, system_message, max_tokens, temperature, top_p],
+        outputs=[msg, chatbot],
+        queue=True
+    ).then(
+        lambda: gr.update(interactive=True),
+        None,
+        [msg]
+    )
+
     # Auto-analysis on file upload
     file_upload.change(
         chat,
@@ -234,4 +253,4 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css, title="EveryChat �
     )
 
 if __name__ == "__main__":
-    demo.launch()        
+    demo.launch()
