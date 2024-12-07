@@ -4,9 +4,9 @@ import os
 import pandas as pd
 from typing import List, Tuple
 
-# LLM 모델 정의
+# LLM Models Definition
 LLM_MODELS = {
-    "Cohere c4ai-crp-08-2024": "CohereForAI/c4ai-command-r-plus-08-2024",  # 기본 모델
+    "Cohere c4ai-crp-08-2024": "CohereForAI/c4ai-command-r-plus-08-2024",  # Default
     "Meta Llama3.3-70B": "meta-llama/Llama-3.3-70B-Instruct",    
     "Mistral Nemo 2407": "mistralai/Mistral-Nemo-Instruct-2407",
     "Alibaba Qwen QwQ-32B": "Qwen/QwQ-32B-Preview"
@@ -16,19 +16,17 @@ def get_client(model_name):
     return InferenceClient(LLM_MODELS[model_name], token=os.getenv("HF_TOKEN"))
 
 def analyze_file_content(content, file_type):
-    """파일 내용을 분석하여 구조적 요약을 반환"""
+    """Analyze file content and return structural summary"""
     if file_type in ['parquet', 'csv']:
         try:
-            # 데이터셋 구조 분석
             lines = content.split('\n')
             header = lines[0]
             columns = header.count('|') - 1
-            rows = len(lines) - 3  # 헤더와 구분선 제외
-            return f"데이터셋 구조: {columns}개 컬럼, {rows}개 데이터 샘플"
+            rows = len(lines) - 3
+            return f"📊 Dataset Structure: {columns} columns, {rows} data samples"
         except:
-            return "데이터셋 구조 분석 실패"
+            return "❌ Dataset structure analysis failed"
     
-    # 텍스트/코드 파일의 경우
     lines = content.split('\n')
     total_lines = len(lines)
     non_empty_lines = len([line for line in lines if line.strip()])
@@ -37,11 +35,11 @@ def analyze_file_content(content, file_type):
         functions = len([line for line in lines if 'def ' in line])
         classes = len([line for line in lines if 'class ' in line])
         imports = len([line for line in lines if 'import ' in line or 'from ' in line])
-        return f"코드 구조 분석: 총 {total_lines}줄 (함수 {functions}개, 클래스 {classes}개, 임포트 {imports}개)"
+        return f"💻 Code Structure: {total_lines} lines (Functions: {functions}, Classes: {classes}, Imports: {imports})"
     
     paragraphs = content.count('\n\n') + 1
     words = len(content.split())
-    return f"문서 구조 분석: 총 {total_lines}줄, {paragraphs}개 문단, 약 {words}개 단어"
+    return f"📝 Document Structure: {total_lines} lines, {paragraphs} paragraphs, ~{words} words"
 
 def read_uploaded_file(file):
     if file is None:
@@ -54,32 +52,28 @@ def read_uploaded_file(file):
             content = df.head(10).to_markdown(index=False)
             return content, "parquet"
         elif file_ext == '.csv':
-            # CSV 파일 읽기 시 다양한 인코딩 시도
             encodings = ['utf-8', 'cp949', 'euc-kr', 'latin1']
             for encoding in encodings:
                 try:
                     df = pd.read_csv(file.name, encoding=encoding)
-                    content = f"데이터 미리보기:\n{df.head(10).to_markdown(index=False)}\n\n"
-                    content += f"\n데이터 정보:\n"
-                    content += f"- 총 행 수: {len(df)}\n"
-                    content += f"- 총 열 수: {len(df.columns)}\n"
-                    content += f"- 컬럼 목록: {', '.join(df.columns)}\n"
-                    # 데이터 타입 정보 추가
-                    content += f"\n컬럼별 데이터 타입:\n"
+                    content = f"📊 Data Preview:\n{df.head(10).to_markdown(index=False)}\n\n"
+                    content += f"\n📈 Data Information:\n"
+                    content += f"- Total Rows: {len(df)}\n"
+                    content += f"- Total Columns: {len(df.columns)}\n"
+                    content += f"- Column List: {', '.join(df.columns)}\n"
+                    content += f"\n📋 Column Data Types:\n"
                     for col, dtype in df.dtypes.items():
                         content += f"- {col}: {dtype}\n"
-                    # 결측치 정보 추가
                     null_counts = df.isnull().sum()
                     if null_counts.any():
-                        content += f"\n결측치 정보:\n"
+                        content += f"\n⚠️ Missing Values:\n"
                         for col, null_count in null_counts[null_counts > 0].items():
-                            content += f"- {col}: {null_count}개\n"
+                            content += f"- {col}: {null_count} missing\n"
                     return content, "csv"
                 except UnicodeDecodeError:
                     continue
-            raise UnicodeDecodeError(f"지원되는 인코딩({', '.join(encodings)})으로 파일을 읽을 수 없습니다.")
+            raise UnicodeDecodeError(f"❌ Unable to read file with supported encodings ({', '.join(encodings)})")
         else:
-            # 텍스트 파일 읽기 시도
             encodings = ['utf-8', 'cp949', 'euc-kr', 'latin1']
             for encoding in encodings:
                 try:
@@ -88,9 +82,9 @@ def read_uploaded_file(file):
                     return content, "text"
                 except UnicodeDecodeError:
                     continue
-            raise UnicodeDecodeError(f"지원되는 인코딩({', '.join(encodings)})으로 파일을 읽을 수 없습니다.")
+            raise UnicodeDecodeError(f"❌ Unable to read file with supported encodings ({', '.join(encodings)})")
     except Exception as e:
-        return f"파일을 읽는 중 오류가 발생했습니다: {str(e)}", "error"
+        return f"❌ Error reading file: {str(e)}", "error"
 
 def format_history(history):
     formatted_history = []
@@ -101,17 +95,16 @@ def format_history(history):
     return formatted_history
 
 def chat(message, history, uploaded_file, model_name, system_message="", max_tokens=4000, temperature=0.7, top_p=0.9):
-    system_prefix = """너는 파일 분석 전문가입니다. 업로드된 파일의 내용을 깊이 있게 분석하여 다음과 같은 관점에서 설명해야 합니다:
+    system_prefix = """You are a file analysis expert. Analyze the uploaded file in depth from the following perspectives:
+1. 📋 Overall structure and composition
+2. 📊 Key content and pattern analysis
+3. 📈 Data characteristics and meaning
+   - For datasets: Column meanings, data types, value distributions
+   - For text/code: Structural features, main patterns
+4. 💡 Potential applications
+5. ✨ Data quality and areas for improvement
 
-1. 파일의 전반적인 구조와 구성
-2. 주요 내용과 패턴 분석
-3. 데이터의 특징과 의미
-   - 데이터셋의 경우: 컬럼의 의미, 데이터 타입, 값의 분포
-   - 텍스트/코드의 경우: 구조적 특징, 주요 패턴
-4. 잠재적 활용 방안
-5. 데이터 품질 및 개선 가능한 부분
-
-전문가적 관점에서 상세하고 구조적인 분석을 제공하되, 이해하기 쉽게 설명하세요. 분석 결과는 Markdown 형식으로 작성하고, 가능한 한 구체적인 예시를 포함하세요."""
+Provide detailed and structured analysis from an expert perspective, but explain in an easy-to-understand way. Format the analysis results in Markdown and include specific examples where possible."""
 
     if uploaded_file:
         content, file_type = read_uploaded_file(uploaded_file)
@@ -119,24 +112,23 @@ def chat(message, history, uploaded_file, model_name, system_message="", max_tok
             yield "", history + [[message, content]]
             return
         
-        # 파일 내용 분석 및 구조적 요약
         file_summary = analyze_file_content(content, file_type)
         
         if file_type in ['parquet', 'csv']:
-            system_message += f"\n\n파일 내용:\n```markdown\n{content}\n```"
+            system_message += f"\n\nFile Content:\n```markdown\n{content}\n```"
         else:
-            system_message += f"\n\n파일 내용:\n```\n{content}\n```"
+            system_message += f"\n\nFile Content:\n```\n{content}\n```"
             
-        if message == "파일 분석을 시작합니다.":
-            message = f"""[구조 분석] {file_summary}
+        if message == "Starting file analysis...":
+            message = f"""[Structure Analysis] {file_summary}
 
-다음 관점에서 상세 분석을 제공해주세요:
-1. 파일의 전반적인 구조와 형식
-2. 주요 내용 및 구성요소 분석
-3. 데이터/내용의 특징과 패턴
-4. 품질 및 완성도 평가
-5. 개선 가능한 부분 제안
-6. 실제 활용 방안 및 추천사항"""
+Please provide detailed analysis from these perspectives:
+1. 📋 Overall file structure and format
+2. 📊 Key content and component analysis
+3. 📈 Data/content characteristics and patterns
+4. ⭐ Quality and completeness evaluation
+5. 💡 Suggested improvements
+6. 🎯 Practical applications and recommendations"""
 
     messages = [{"role": "system", "content": f"{system_prefix} {system_message}"}]
     messages.extend(format_history(history))
@@ -159,46 +151,56 @@ def chat(message, history, uploaded_file, model_name, system_message="", max_tok
                 yield "", history + [[message, partial_message]]
                 
     except Exception as e:
-        error_msg = f"추론 중 오류가 발생했습니다: {str(e)}"
+        error_msg = f"❌ Inference error: {str(e)}"
         yield "", history + [[message, error_msg]]
 
 css = """
 footer {visibility: hidden}
 """
 
-with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
+with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css, title="EveryChat 🤖") as demo:
+    gr.HTML(
+        """
+        <div style="text-align: center; max-width: 800px; margin: 0 auto;">
+            <h1 style="font-size: 3em; font-weight: 600; margin: 0.5em;">EveryChat 🤖</h1>
+            <h3 style="font-size: 1.2em; margin: 1em;">Your Intelligent File Analysis Assistant 📊</h3>
+        </div>
+        """
+    )
+    
     with gr.Row():
         with gr.Column(scale=2):
-            chatbot = gr.Chatbot(height=600)
+            chatbot = gr.Chatbot(height=600, label="Chat Interface 💬")
             msg = gr.Textbox(
-                label="메시지를 입력하세요",
+                label="Type your message",
                 show_label=False,
-                placeholder="메시지를 입력하세요...",
+                placeholder="Ask me anything about the uploaded file... 💭",
                 container=False
             )
-            clear = gr.ClearButton([msg, chatbot])
+            clear = gr.ClearButton([msg, chatbot], label="Clear Chat 🗑️")
         
         with gr.Column(scale=1):
             model_name = gr.Radio(
                 choices=list(LLM_MODELS.keys()),
-                value="Cohere c4ai-crp-08-2024",  # 기본값을 Cohere 모델로 명시적 지정
-                label="최신 LLM 모델 선택",
-                info="사용할 LLM 모델을 선택하세요"
+                value="Cohere c4ai-crp-08-2024",
+                label="Select LLM Model 🤖",
+                info="Choose your preferred AI model"
             )
             
             file_upload = gr.File(
-                label="파일 업로드 (텍스트, 코드, CSV, Parquet 파일)",
+                label="Upload File 📁",
+                info="Support: Text, Code, CSV, Parquet files",
                 file_types=["text", ".csv", ".parquet"],
                 type="filepath"
             )
             
-            with gr.Accordion("고급 설정", open=False):
-                system_message = gr.Textbox(label="System Message", value="")
-                max_tokens = gr.Slider(minimum=1, maximum=8000, value=4000, label="Max Tokens")
-                temperature = gr.Slider(minimum=0, maximum=1, value=0.7, label="Temperature")
-                top_p = gr.Slider(minimum=0, maximum=1, value=0.9, label="Top P")
+            with gr.Accordion("Advanced Settings ⚙️", open=False):
+                system_message = gr.Textbox(label="System Message 📝", value="")
+                max_tokens = gr.Slider(minimum=1, maximum=8000, value=4000, label="Max Tokens 📊")
+                temperature = gr.Slider(minimum=0, maximum=1, value=0.7, label="Temperature 🌡️")
+                top_p = gr.Slider(minimum=0, maximum=1, value=0.9, label="Top P 📈")
 
-    # 이벤트 바인딩
+    # Event bindings
     msg.submit(
         chat,
         inputs=[msg, chatbot, file_upload, model_name, system_message, max_tokens, temperature, top_p],
@@ -210,26 +212,26 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
         [msg]
     )
 
-    # 파일 업로드 시 자동 분석
+    # Auto-analysis on file upload
     file_upload.change(
         chat,
-        inputs=[gr.Textbox(value="파일 분석을 시작합니다."), chatbot, file_upload, model_name, system_message, max_tokens, temperature, top_p],
+        inputs=[gr.Textbox(value="Starting file analysis..."), chatbot, file_upload, model_name, system_message, max_tokens, temperature, top_p],
         outputs=[msg, chatbot],
         queue=True
     )
 
-    # 예제 추가
+    # Example queries
     gr.Examples(
         examples=[
-            ["파일의 전반적인 구조와 특징을 자세히 설명해주세요."],
-            ["이 파일의 주요 패턴과 특징을 분석해주세요."],
-            ["파일의 품질과 개선 가능한 부분을 평가해주세요."],
-            ["이 파일을 실제로 어떻게 활용할 수 있을까요?"],
-            ["파일의 주요 내용을 요약하고 핵심 인사이트를 도출해주세요."],
-            ["이전 분석을 이어서 더 자세히 설명해주세요."],
+            ["Please explain the overall structure and features of the file in detail 📋"],
+            ["Analyze the main patterns and characteristics of this file 📊"],
+            ["Evaluate the file's quality and potential improvements 💡"],
+            ["How can we practically utilize this file? 🎯"],
+            ["Summarize the main content and derive key insights ✨"],
+            ["Please continue with more detailed analysis 📈"],
         ],
         inputs=msg,
     )
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch()        
