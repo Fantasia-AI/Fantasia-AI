@@ -71,6 +71,8 @@ css = """
 footer {visibility: hidden}
 """
 
+# ... (이전 코드 동일)
+
 with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
     with gr.Row():
         with gr.Column(scale=2):
@@ -85,9 +87,9 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css) as demo:
         
         with gr.Column(scale=1):
             file_upload = gr.File(
-                label="파일 업로드 (.cod, .txt, .py, .parquet)",
-                file_types=[".cod", ".txt", ".py", ".parquet"],
-                type="file"
+                label="파일 업로드 (.csv, .txt, .py, .js, .html, .parquet)",
+                file_types=[".csv, .txt, .py, .js, .html, .parquet"],
+                type="filepath"  # 'file'에서 'filepath'로 수정
             )
             
             with gr.Accordion("고급 설정", open=False):
