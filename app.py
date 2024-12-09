@@ -7,13 +7,15 @@ from typing import List, Tuple
 # LLM Models Definition
 LLM_MODELS = {
     "Cohere c4ai-crp-08-2024": "CohereForAI/c4ai-command-r-plus-08-2024",  # Default
-    "Meta Llama3.3-70B": "meta-llama/Llama-3.3-70B-Instruct",    
-    "Mistral Nemo 2407": "mistralai/Mistral-Nemo-Instruct-2407",
-    "Alibaba Qwen QwQ-32B": "Qwen/QwQ-32B-Preview"
+    "Meta Llama3.3-70B": "meta-llama/Llama-3.3-70B-Instruct"    # Backup model
 }
 
-def get_client(model_name):
-    return InferenceClient(LLM_MODELS[model_name], token=os.getenv("HF_TOKEN"))
+def get_client(model_name="Cohere c4ai-crp-08-2024"):
+    try:
+        return InferenceClient(LLM_MODELS[model_name], token=os.getenv("HF_TOKEN"))
+    except Exception:
+        # If primary model fails, try backup model
+        return InferenceClient(LLM_MODELS["Meta Llama3.3-70B"], token=os.getenv("HF_TOKEN"))
 
 def analyze_file_content(content, file_type):
     """Analyze file content and return structural summary"""
@@ -94,7 +96,7 @@ def format_history(history):
             formatted_history.append({"role": "assistant", "content": assistant_msg})
     return formatted_history
 
-def chat(message, history, uploaded_file, model_name, system_message="", max_tokens=4000, temperature=0.7, top_p=0.9):
+def chat(message, history, uploaded_file, system_message="", max_tokens=4000, temperature=0.7, top_p=0.9):
     system_prefix = """You are a file analysis expert. Analyze the uploaded file in depth from the following perspectives:
 1. 📋 Overall structure and composition
 2. 📊 Key content and pattern analysis
@@ -144,7 +146,7 @@ Please provide detailed analysis from these perspectives:
     messages.append({"role": "user", "content": message})
 
     try:
-        client = get_client(model_name)
+        client = get_client()
         partial_message = ""
         current_history = []
         
@@ -176,8 +178,6 @@ css = """
 footer {visibility: hidden}
 """
 
-# ... (이전 코드 동일)
-
 with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css, title="EveryChat 🤖") as demo:
     gr.HTML(
         """
@@ -206,13 +206,6 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css, title="EveryChat �
                 send = gr.Button("Send 📤")
         
         with gr.Column(scale=1):
-            model_name = gr.Radio(
-                choices=list(LLM_MODELS.keys()),
-                value="Cohere c4ai-crp-08-2024",
-                label="Select LLM Model 🤖",
-                info="Choose your preferred AI model"
-            )
-            
             gr.Markdown("### Upload File 📁\nSupport: Text, Code, CSV, Parquet files")
             file_upload = gr.File(
                 label="Upload File",
@@ -229,7 +222,7 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css, title="EveryChat �
     # Event bindings
     msg.submit(
         chat,
-        inputs=[msg, chatbot, file_upload, model_name, system_message, max_tokens, temperature, top_p],
+        inputs=[msg, chatbot, file_upload, system_message, max_tokens, temperature, top_p],
         outputs=[msg, chatbot],
         queue=True
     ).then(
@@ -240,7 +233,7 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css, title="EveryChat �
 
     send.click(
         chat,
-        inputs=[msg, chatbot, file_upload, model_name, system_message, max_tokens, temperature, top_p],
+        inputs=[msg, chatbot, file_upload, system_message, max_tokens, temperature, top_p],
         outputs=[msg, chatbot],
         queue=True
     ).then(
@@ -252,7 +245,7 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css, title="EveryChat �
     # Auto-analysis on file upload
     file_upload.change(
         chat,
-        inputs=[gr.Textbox(value="Starting file analysis..."), chatbot, file_upload, model_name, system_message, max_tokens, temperature, top_p],
+        inputs=[gr.Textbox(value="Starting file analysis..."), chatbot, file_upload, system_message, max_tokens, temperature, top_p],
         outputs=[msg, chatbot],
         queue=True
     )
