@@ -1,8 +1,17 @@
+import os
+from dotenv import load_dotenv
 import gradio as gr
 from huggingface_hub import InferenceClient
-import os
 import pandas as pd
 from typing import List, Tuple
+
+# .env 파일 로드
+load_dotenv()
+
+# HuggingFace 토큰 설정
+HF_TOKEN = os.getenv("HF_TOKEN")
+if not HF_TOKEN:
+    raise ValueError("HF_TOKEN이 설정되지 않았습니다. .env 파일에 HF_TOKEN을 설정해주세요.")
 
 # LLM Models Definition
 LLM_MODELS = {
@@ -12,10 +21,10 @@ LLM_MODELS = {
 
 def get_client(model_name="Cohere c4ai-crp-08-2024"):
     try:
-        return InferenceClient(LLM_MODELS[model_name], token=os.getenv("HF_TOKEN"))
+        return InferenceClient(LLM_MODELS[model_name], token=HF_TOKEN)
     except Exception:
         # If primary model fails, try backup model
-        return InferenceClient(LLM_MODELS["Meta Llama3.3-70B"], token=os.getenv("HF_TOKEN"))
+        return InferenceClient(LLM_MODELS["Meta Llama3.3-70B"], token=HF_TOKEN)
 
 def analyze_file_content(content, file_type):
     """Analyze file content and return structural summary"""
@@ -25,9 +34,9 @@ def analyze_file_content(content, file_type):
             header = lines[0]
             columns = header.count('|') - 1
             rows = len(lines) - 3
-            return f"📊 Dataset Structure: {columns} columns, {rows} data samples"
+            return f"📊 데이터셋 구조: {columns}개 컬럼, {rows}개 데이터"
         except:
-            return "❌ Dataset structure analysis failed"
+            return "❌ 데이터셋 구조 분석 실패"
     
     lines = content.split('\n')
     total_lines = len(lines)
@@ -37,11 +46,11 @@ def analyze_file_content(content, file_type):
         functions = len([line for line in lines if 'def ' in line])
         classes = len([line for line in lines if 'class ' in line])
         imports = len([line for line in lines if 'import ' in line or 'from ' in line])
-        return f"💻 Code Structure: {total_lines} lines (Functions: {functions}, Classes: {classes}, Imports: {imports})"
+        return f"💻 코드 구조: {total_lines}줄 (함수: {functions}, 클래스: {classes}, 임포트: {imports})"
     
     paragraphs = content.count('\n\n') + 1
     words = len(content.split())
-    return f"📝 Document Structure: {total_lines} lines, {paragraphs} paragraphs, ~{words} words"
+    return f"📝 문서 구조: {total_lines}줄, {paragraphs}단락, 약 {words}단어"
 
 def read_uploaded_file(file):
     if file is None:
@@ -58,23 +67,23 @@ def read_uploaded_file(file):
             for encoding in encodings:
                 try:
                     df = pd.read_csv(file.name, encoding=encoding)
-                    content = f"📊 Data Preview:\n{df.head(10).to_markdown(index=False)}\n\n"
-                    content += f"\n📈 Data Information:\n"
-                    content += f"- Total Rows: {len(df)}\n"
-                    content += f"- Total Columns: {len(df.columns)}\n"
-                    content += f"- Column List: {', '.join(df.columns)}\n"
-                    content += f"\n📋 Column Data Types:\n"
+                    content = f"📊 데이터 미리보기:\n{df.head(10).to_markdown(index=False)}\n\n"
+                    content += f"\n📈 데이터 정보:\n"
+                    content += f"- 전체 행 수: {len(df)}\n"
+                    content += f"- 전체 열 수: {len(df.columns)}\n"
+                    content += f"- 컬럼 목록: {', '.join(df.columns)}\n"
+                    content += f"\n📋 컬럼 데이터 타입:\n"
                     for col, dtype in df.dtypes.items():
                         content += f"- {col}: {dtype}\n"
                     null_counts = df.isnull().sum()
                     if null_counts.any():
-                        content += f"\n⚠️ Missing Values:\n"
+                        content += f"\n⚠️ 결측치:\n"
                         for col, null_count in null_counts[null_counts > 0].items():
-                            content += f"- {col}: {null_count} missing\n"
+                            content += f"- {col}: {null_count}개 누락\n"
                     return content, "csv"
                 except UnicodeDecodeError:
                     continue
-            raise UnicodeDecodeError(f"❌ Unable to read file with supported encodings ({', '.join(encodings)})")
+            raise UnicodeDecodeError(f"❌ 지원되는 인코딩으로 파일을 읽을 수 없습니다 ({', '.join(encodings)})")
         else:
             encodings = ['utf-8', 'cp949', 'euc-kr', 'latin1']
             for encoding in encodings:
@@ -84,9 +93,9 @@ def read_uploaded_file(file):
                     return content, "text"
                 except UnicodeDecodeError:
                     continue
-            raise UnicodeDecodeError(f"❌ Unable to read file with supported encodings ({', '.join(encodings)})")
+            raise UnicodeDecodeError(f"❌ 지원되는 인코딩으로 파일을 읽을 수 없습니다 ({', '.join(encodings)})")
     except Exception as e:
-        return f"❌ Error reading file: {str(e)}", "error"
+        return f"❌ 파일 읽기 오류: {str(e)}", "error"
 
 def format_history(history):
     formatted_history = []
@@ -96,7 +105,6 @@ def format_history(history):
             formatted_history.append({"role": "assistant", "content": assistant_msg})
     return formatted_history
 
-# 시스템 프롬프트 수정
 def chat(message, history, uploaded_file, system_message="", max_tokens=4000, temperature=0.7, top_p=0.9):
     system_prefix = """저는 여러분의 친근하고 지적인 AI 어시스턴트입니다. 다음과 같은 원칙으로 소통하겠습니다:
 
@@ -121,7 +129,7 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
         else:
             system_message += f"\n\n파일 내용:\n```\n{content}\n```"
             
-        if message == "Starting file analysis...":
+        if message == "파일 분석을 시작합니다...":
             message = f"""[파일 구조 분석] {file_summary}
 
 다음 관점에서 도움을 드리겠습니다:
@@ -173,8 +181,12 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
         ]
         yield "", error_history
 
-# UI 텍스트 한글화
-with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="GiniGEN 🤖") as demo:
+css = """
+footer {visibility: hidden}
+"""
+
+# UI 구성
+with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css, title="GiniGEN 🤖") as demo:
     gr.HTML(
         """
         <div style="text-align: center; max-width: 800px; margin: 0 auto;">
@@ -189,6 +201,7 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="GiniGEN 🤖") as demo
             chatbot = gr.Chatbot(
                 height=600, 
                 label="대화창 💬",
+                show_label=True,
                 type="messages"
             )
             msg = gr.Textbox(
@@ -215,7 +228,7 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="GiniGEN 🤖") as demo
                 temperature = gr.Slider(minimum=0, maximum=1, value=0.7, label="창의성 수준 🌡️")
                 top_p = gr.Slider(minimum=0, maximum=1, value=0.9, label="응답 다양성 📈")
 
-    # 예시 질문 수정
+    # 예시 질문
     gr.Examples(
         examples=[
             ["안녕하세요! 어떤 도움이 필요하신가요? 🤝"],
@@ -226,6 +239,29 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="GiniGEN 🤖") as demo
             ["궁금한 점이 더 있는데 여쭤봐도 될까요? 🤔"],
         ],
         inputs=msg,
+    )
+
+    # 이벤트 바인딩
+    msg.submit(
+        chat,
+        inputs=[msg, chatbot, file_upload, system_message, max_tokens, temperature, top_p],
+        outputs=[msg, chatbot]
+    )
+
+    send.click(
+        chat,
+        inputs=[msg, chatbot, file_upload, system_message, max_tokens, temperature, top_p],
+        outputs=[msg, chatbot]
+    )
+
+    # 파일 업로드시 자동 분석
+    file_upload.change(
+        lambda: "파일 분석을 시작합니다...",
+        outputs=msg
+    ).then(
+        chat,
+        inputs=[msg, chatbot, file_upload, system_message, max_tokens, temperature, top_p],
+        outputs=[msg, chatbot]
     )
 
 if __name__ == "__main__":
