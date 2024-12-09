@@ -53,6 +53,26 @@ class ChatHistory:
             ])
         return messages
 
+    def clear_history(self):
+        self.history = []
+        self.save_history()
+
+    def save_history(self):
+        try:
+            with open(self.history_file, 'w', encoding='utf-8') as f:
+                json.dump(self.history, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"히스토리 저장 실패: {e}")
+
+    def load_history(self):
+        try:
+            if os.path.exists(self.history_file):
+                with open(self.history_file, 'r', encoding='utf-8') as f:
+                    self.history = json.load(f)
+        except Exception as e:
+            print(f"히스토리 로드 실패: {e}")
+            self.history = []
+
 
 # 전역 ChatHistory 인스턴스 생성
 chat_history = ChatHistory()
