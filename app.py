@@ -230,13 +230,6 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
         yield "", error_history
 
 with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="GiniGEN 🤖") as demo:
-    gr.HTML(
-        """
-        <div style="text-align: center; max-width: 800px; margin: 0 auto;">
-            <h3 style="font-size: 3em; font-weight: 600; margin: 0.5em;">GiniGEN 🤖</h3>
-        </div>
-        """
-    )
 
     with gr.Row():
         with gr.Column(scale=2):
@@ -257,7 +250,7 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="GiniGEN 🤖") as demo
                 send = gr.Button("보내기 📤")
         
         with gr.Column(scale=1):
-            gr.Markdown("### 파일 업로드 📁\n지원 형식: 텍스트, 코드, CSV, Parquet 파일")
+            gr.Markdown("### GiniGEN 🤖 [파일 업로드] 📁\n지원 형식: 텍스트, 코드, CSV, Parquet 파일")
             file_upload = gr.File(
                 label="파일 선택",
                 file_types=["text", ".csv", ".parquet"],
