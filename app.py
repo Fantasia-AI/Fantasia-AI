@@ -4,14 +4,11 @@ import gradio as gr
 from huggingface_hub import InferenceClient
 import pandas as pd
 from typing import List, Tuple
+import json
+from datetime import datetime
 
-# .env 파일 로드
-load_dotenv()
-
-# HuggingFace 토큰 설정
+# 환경 변수 설정
 HF_TOKEN = os.getenv("HF_TOKEN")
-if not HF_TOKEN:
-    raise ValueError("HF_TOKEN이 설정되지 않았습니다. .env 파일에 HF_TOKEN을 설정해주세요.")
 
 # LLM Models Definition
 LLM_MODELS = {
@@ -19,11 +16,52 @@ LLM_MODELS = {
     "Meta Llama3.3-70B": "meta-llama/Llama-3.3-70B-Instruct"    # Backup model
 }
 
+# 대화 히스토리를 저장할 클래스
+class ChatHistory:
+    def __init__(self):
+        self.history = []
+        self.history_file = "/tmp/chat_history.json"  # HF Space에서 사용할 임시 경로
+        self.load_history()
+
+    def add_message(self, role: str, content: str):
+        message = {
+            "role": role,
+            "content": content,
+            "timestamp": datetime.now().isoformat()
+        }
+        self.history.append(message)
+        self.save_history()
+
+    def get_history(self):
+        return self.history
+
+    def clear_history(self):
+        self.history = []
+        self.save_history()
+
+    def save_history(self):
+        try:
+            with open(self.history_file, 'w', encoding='utf-8') as f:
+                json.dump(self.history, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"히스토리 저장 실패: {e}")
+
+    def load_history(self):
+        try:
+            if os.path.exists(self.history_file):
+                with open(self.history_file, 'r', encoding='utf-8') as f:
+                    self.history = json.load(f)
+        except Exception as e:
+            print(f"히스토리 로드 실패: {e}")
+            self.history = []
+
+# 전역 ChatHistory 인스턴스 생성
+chat_history = ChatHistory()
+
 def get_client(model_name="Cohere c4ai-crp-08-2024"):
     try:
         return InferenceClient(LLM_MODELS[model_name], token=HF_TOKEN)
     except Exception:
-        # If primary model fails, try backup model
         return InferenceClient(LLM_MODELS["Meta Llama3.3-70B"], token=HF_TOKEN)
 
 def analyze_file_content(content, file_type):
@@ -117,10 +155,16 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
 항상 예의 바르고 친절하게 응답하며, 필요한 경우 구체적인 예시나 설명을 추가하여 
 이해를 돕겠습니다."""
 
+    # 사용자 메시지 저장
+    chat_history.add_message("user", message)
+
     if uploaded_file:
         content, file_type = read_uploaded_file(uploaded_file)
         if file_type == "error":
-            return "", [{"role": "user", "content": message}, {"role": "assistant", "content": content}]
+            error_message = content
+            chat_history.add_message("assistant", error_message)
+            return "", [{"role": "user", "content": message}, 
+                       {"role": "assistant", "content": error_message}]
         
         file_summary = analyze_file_content(content, file_type)
         
@@ -172,15 +216,18 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
                     {"role": "assistant", "content": partial_message}
                 ]
                 yield "", current_history
+        
+        # 완성된 응답 저장
+        chat_history.add_message("assistant", partial_message)
                 
     except Exception as e:
         error_msg = f"❌ 오류가 발생했습니다: {str(e)}"
+        chat_history.add_message("assistant", error_msg)
         error_history = [
             {"role": "user", "content": message},
             {"role": "assistant", "content": error_msg}
         ]
         yield "", error_history
-
 
 with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="GiniGEN 🤖") as demo:
     gr.HTML(
@@ -236,6 +283,11 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="GiniGEN 🤖") as demo
         inputs=msg,
     )
 
+    # 대화내용 지우기 버튼에 히스토리 초기화 기능 추가
+    def clear_chat():
+        chat_history.clear_history()
+        return None, None
+
     # 이벤트 바인딩
     msg.submit(
         chat,
@@ -246,6 +298,11 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="GiniGEN 🤖") as demo
     send.click(
         chat,
         inputs=[msg, chatbot, file_upload, system_message, max_tokens, temperature, top_p],
+        outputs=[msg, chatbot]
+    )
+
+    clear.click(
+        clear_chat,
         outputs=[msg, chatbot]
     )
 
