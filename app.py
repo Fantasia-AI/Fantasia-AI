@@ -182,7 +182,7 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
         yield "", error_history
 
 
-with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css, title="GiniGEN 🤖") as demo:
+with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="GiniGEN 🤖") as demo:
     gr.HTML(
         """
         <div style="text-align: center; max-width: 800px; margin: 0 auto;">
