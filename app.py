@@ -96,169 +96,70 @@ def format_history(history):
             formatted_history.append({"role": "assistant", "content": assistant_msg})
     return formatted_history
 
+# 시스템 프롬프트 수정
 def chat(message, history, uploaded_file, system_message="", max_tokens=4000, temperature=0.7, top_p=0.9):
-    system_prefix = """You are a file analysis expert. Analyze the uploaded file in depth from the following perspectives:
-1. 📋 Overall structure and composition
-2. 📊 Key content and pattern analysis
-3. 📈 Data characteristics and meaning
-   - For datasets: Column meanings, data types, value distributions
-   - For text/code: Structural features, main patterns
-4. 💡 Potential applications
-5. ✨ Data quality and areas for improvement
+    system_prefix = """저는 여러분의 친근하고 지적인 AI 어시스턴트입니다. 다음과 같은 원칙으로 소통하겠습니다:
 
-Provide detailed and structured analysis from an expert perspective, but explain in an easy-to-understand way. Format the analysis results in Markdown and include specific examples where possible."""
+1. 🤝 친근하고 공감적인 태도로 대화
+2. 💡 명확하고 이해하기 쉬운 설명 제공
+3. 🎯 질문의 의도를 정확히 파악하여 맞춤형 답변
+4. 📚 필요한 경우 업로드된 파일 내용을 참고하여 구체적인 도움 제공
+5. ✨ 추가적인 통찰과 제안을 통한 가치 있는 대화
 
-    if uploaded_file:
-        content, file_type = read_uploaded_file(uploaded_file)
-        if file_type == "error":
-            return "", [{"role": "user", "content": message}, {"role": "assistant", "content": content}]
-        
-        file_summary = analyze_file_content(content, file_type)
-        
-        if file_type in ['parquet', 'csv']:
-            system_message += f"\n\nFile Content:\n```markdown\n{content}\n```"
-        else:
-            system_message += f"\n\nFile Content:\n```\n{content}\n```"
-            
-        if message == "Starting file analysis...":
-            message = f"""[Structure Analysis] {file_summary}
+항상 예의 바르고 친절하게 응답하며, 필요한 경우 구체적인 예시나 설명을 추가하여 
+이해를 돕겠습니다."""
 
-Please provide detailed analysis from these perspectives:
-1. 📋 Overall file structure and format
-2. 📊 Key content and component analysis
-3. 📈 Data/content characteristics and patterns
-4. ⭐ Quality and completeness evaluation
-5. 💡 Suggested improvements
-6. 🎯 Practical applications and recommendations"""
-
-    messages = [{"role": "system", "content": f"{system_prefix} {system_message}"}]
-    
-    # Convert history to message format
-    if history is not None:
-        for item in history:
-            if isinstance(item, dict):
-                messages.append(item)
-            elif isinstance(item, (list, tuple)) and len(item) == 2:
-                messages.append({"role": "user", "content": item[0]})
-                if item[1]:
-                    messages.append({"role": "assistant", "content": item[1]})
-
-    messages.append({"role": "user", "content": message})
-
-    try:
-        client = get_client()
-        partial_message = ""
-        current_history = []
-        
-        for msg in client.chat_completion(
-            messages,
-            max_tokens=max_tokens,
-            stream=True,
-            temperature=temperature,
-            top_p=top_p,
-        ):
-            token = msg.choices[0].delta.get('content', None)
-            if token:
-                partial_message += token
-                current_history = [
-                    {"role": "user", "content": message},
-                    {"role": "assistant", "content": partial_message}
-                ]
-                yield "", current_history
-                
-    except Exception as e:
-        error_msg = f"❌ Inference error: {str(e)}"
-        error_history = [
-            {"role": "user", "content": message},
-            {"role": "assistant", "content": error_msg}
-        ]
-        yield "", error_history
-
-css = """
-footer {visibility: hidden}
-"""
-
-with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css, title="EveryChat 🤖") as demo:
+# UI 텍스트 한글화
+with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="AI 어시스턴트 🤖") as demo:
     gr.HTML(
         """
         <div style="text-align: center; max-width: 800px; margin: 0 auto;">
-            <h1 style="font-size: 3em; font-weight: 600; margin: 0.5em;">EveryChat 🤖</h1>
-            <h3 style="font-size: 1.2em; margin: 1em;">Your Intelligent File Analysis Assistant 📊</h3>
+            <h1 style="font-size: 3em; font-weight: 600; margin: 0.5em;">AI 어시스턴트 🤖</h1>
+            <h3 style="font-size: 1.2em; margin: 1em;">당신의 든든한 대화 파트너 💬</h3>
         </div>
         """
     )
-    
+
     with gr.Row():
         with gr.Column(scale=2):
             chatbot = gr.Chatbot(
                 height=600, 
-                label="Chat Interface 💬",
+                label="대화창 💬",
                 type="messages"
             )
             msg = gr.Textbox(
-                label="Type your message",
+                label="메시지 입력",
                 show_label=False,
-                placeholder="Ask me anything about the uploaded file... 💭",
+                placeholder="무엇이든 물어보세요... 💭",
                 container=False
             )
             with gr.Row():
-                clear = gr.ClearButton([msg, chatbot])
-                send = gr.Button("Send 📤")
+                clear = gr.ClearButton([msg, chatbot], value="대화내용 지우기")
+                send = gr.Button("보내기 📤")
         
         with gr.Column(scale=1):
-            gr.Markdown("### Upload File 📁\nSupport: Text, Code, CSV, Parquet files")
+            gr.Markdown("### 파일 업로드 📁\n지원 형식: 텍스트, 코드, CSV, Parquet 파일")
             file_upload = gr.File(
-                label="Upload File",
+                label="파일 선택",
                 file_types=["text", ".csv", ".parquet"],
                 type="filepath"
             )
             
-            with gr.Accordion("Advanced Settings ⚙️", open=False):
-                system_message = gr.Textbox(label="System Message 📝", value="")
-                max_tokens = gr.Slider(minimum=1, maximum=8000, value=4000, label="Max Tokens 📊")
-                temperature = gr.Slider(minimum=0, maximum=1, value=0.7, label="Temperature 🌡️")
-                top_p = gr.Slider(minimum=0, maximum=1, value=0.9, label="Top P 📈")
+            with gr.Accordion("고급 설정 ⚙️", open=False):
+                system_message = gr.Textbox(label="시스템 메시지 📝", value="")
+                max_tokens = gr.Slider(minimum=1, maximum=8000, value=4000, label="최대 토큰 수 📊")
+                temperature = gr.Slider(minimum=0, maximum=1, value=0.7, label="창의성 수준 🌡️")
+                top_p = gr.Slider(minimum=0, maximum=1, value=0.9, label="응답 다양성 📈")
 
-    # Event bindings
-    msg.submit(
-        chat,
-        inputs=[msg, chatbot, file_upload, system_message, max_tokens, temperature, top_p],
-        outputs=[msg, chatbot],
-        queue=True
-    ).then(
-        lambda: gr.update(interactive=True),
-        None,
-        [msg]
-    )
-
-    send.click(
-        chat,
-        inputs=[msg, chatbot, file_upload, system_message, max_tokens, temperature, top_p],
-        outputs=[msg, chatbot],
-        queue=True
-    ).then(
-        lambda: gr.update(interactive=True),
-        None,
-        [msg]
-    )
-
-    # Auto-analysis on file upload
-    file_upload.change(
-        chat,
-        inputs=[gr.Textbox(value="Starting file analysis..."), chatbot, file_upload, system_message, max_tokens, temperature, top_p],
-        outputs=[msg, chatbot],
-        queue=True
-    )
-
-    # Example queries
+    # 예시 질문 수정
     gr.Examples(
         examples=[
-            ["Please explain the overall structure and features of the file in detail 📋"],
-            ["Analyze the main patterns and characteristics of this file 📊"],
-            ["Evaluate the file's quality and potential improvements 💡"],
-            ["How can we practically utilize this file? 🎯"],
-            ["Summarize the main content and derive key insights ✨"],
-            ["Please continue with more detailed analysis 📈"],
+            ["안녕하세요! 어떤 도움이 필요하신가요? 🤝"],
+            ["이 내용에 대해 좀 더 자세히 설명해 주실 수 있나요? 💡"],
+            ["제가 이해하기 쉽게 설명해 주시겠어요? 📚"],
+            ["이 내용을 실제로 어떻게 활용할 수 있을까요? 🎯"],
+            ["추가로 조언해 주실 내용이 있으신가요? ✨"],
+            ["궁금한 점이 더 있는데 여쭤봐도 될까요? 🤔"],
         ],
         inputs=msg,
     )
