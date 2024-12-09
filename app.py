@@ -186,7 +186,7 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="GiniGEN 🤖") as demo
     gr.HTML(
         """
         <div style="text-align: center; max-width: 800px; margin: 0 auto;">
-            <h1 style="font-size: 3em; font-weight: 600; margin: 0.5em;">GiniGEN 🤖</h1>
+            <h3 style="font-size: 3em; font-weight: 600; margin: 0.5em;">GiniGEN 🤖</h3>
         </div>
         """
     )
