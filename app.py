@@ -109,8 +109,72 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
 항상 예의 바르고 친절하게 응답하며, 필요한 경우 구체적인 예시나 설명을 추가하여 
 이해를 돕겠습니다."""
 
+    if uploaded_file:
+        content, file_type = read_uploaded_file(uploaded_file)
+        if file_type == "error":
+            return "", [{"role": "user", "content": message}, {"role": "assistant", "content": content}]
+        
+        file_summary = analyze_file_content(content, file_type)
+        
+        if file_type in ['parquet', 'csv']:
+            system_message += f"\n\n파일 내용:\n```markdown\n{content}\n```"
+        else:
+            system_message += f"\n\n파일 내용:\n```\n{content}\n```"
+            
+        if message == "Starting file analysis...":
+            message = f"""[파일 구조 분석] {file_summary}
+
+다음 관점에서 도움을 드리겠습니다:
+1. 📋 전반적인 내용 파악
+2. 💡 주요 특징 설명
+3. 🎯 실용적인 활용 방안
+4. ✨ 개선 제안
+5. 💬 추가 질문이나 필요한 설명"""
+
+    messages = [{"role": "system", "content": f"{system_prefix} {system_message}"}]
+    
+    if history is not None:
+        for item in history:
+            if isinstance(item, dict):
+                messages.append(item)
+            elif isinstance(item, (list, tuple)) and len(item) == 2:
+                messages.append({"role": "user", "content": item[0]})
+                if item[1]:
+                    messages.append({"role": "assistant", "content": item[1]})
+
+    messages.append({"role": "user", "content": message})
+
+    try:
+        client = get_client()
+        partial_message = ""
+        current_history = []
+        
+        for msg in client.chat_completion(
+            messages,
+            max_tokens=max_tokens,
+            stream=True,
+            temperature=temperature,
+            top_p=top_p,
+        ):
+            token = msg.choices[0].delta.get('content', None)
+            if token:
+                partial_message += token
+                current_history = [
+                    {"role": "user", "content": message},
+                    {"role": "assistant", "content": partial_message}
+                ]
+                yield "", current_history
+                
+    except Exception as e:
+        error_msg = f"❌ 오류가 발생했습니다: {str(e)}"
+        error_history = [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": error_msg}
+        ]
+        yield "", error_history
+
 # UI 텍스트 한글화
-with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="AI 어시스턴트 🤖") as demo:
+with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="GiniGEN 🤖") as demo:
     gr.HTML(
         """
         <div style="text-align: center; max-width: 800px; margin: 0 auto;">
