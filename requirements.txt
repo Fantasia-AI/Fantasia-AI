@@ -3,7 +3,8 @@ minijinja
 requests
 gtts
 gradio
-
 pandas 
 pyarrow
 tabulate
+python-dotenv 
+
