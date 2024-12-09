@@ -20,20 +20,30 @@ LLM_MODELS = {
 class ChatHistory:
     def __init__(self):
         self.history = []
-        self.history_file = "/tmp/chat_history.json"  # HF Space에서 사용할 임시 경로
+        self.history_file = "/tmp/chat_history.json"
         self.load_history()
 
-    def add_message(self, role: str, content: str):
-        message = {
-            "role": role,
-            "content": content,
-            "timestamp": datetime.now().isoformat()
+    def add_conversation(self, user_msg: str, assistant_msg: str):
+        conversation = {
+            "timestamp": datetime.now().isoformat(),
+            "conversation": [
+                {"role": "user", "content": user_msg},
+                {"role": "assistant", "content": assistant_msg}
+            ]
         }
-        self.history.append(message)
+        self.history.append(conversation)
         self.save_history()
 
-    def get_history(self):
-        return self.history
+    def get_recent_conversations(self, limit=10):
+        return self.history[-limit:] if self.history else []
+
+    def format_for_display(self):
+        formatted = []
+        for conv in self.history:
+            formatted.extend([
+                [conv["conversation"][0]["content"], conv["conversation"][1]["content"]]
+            ])
+        return formatted
 
     def clear_history(self):
         self.history = []
@@ -135,15 +145,11 @@ def read_uploaded_file(file):
     except Exception as e:
         return f"❌ 파일 읽기 오류: {str(e)}", "error"
 
-def format_history(history):
-    formatted_history = []
-    for user_msg, assistant_msg in history:
-        formatted_history.append({"role": "user", "content": user_msg})
-        if assistant_msg:
-            formatted_history.append({"role": "assistant", "content": assistant_msg})
-    return formatted_history
 
 def chat(message, history, uploaded_file, system_message="", max_tokens=4000, temperature=0.7, top_p=0.9):
+    if not message:
+        return "", history
+
     system_prefix = """저는 여러분의 친근하고 지적인 AI 어시스턴트 'GiniGEN'입니다.. 다음과 같은 원칙으로 소통하겠습니다:
 
 1. 🤝 친근하고 공감적인 태도로 대화
@@ -155,26 +161,23 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
 항상 예의 바르고 친절하게 응답하며, 필요한 경우 구체적인 예시나 설명을 추가하여 
 이해를 돕겠습니다."""
 
-    # 사용자 메시지 저장
-    chat_history.add_message("user", message)
-
-    if uploaded_file:
-        content, file_type = read_uploaded_file(uploaded_file)
-        if file_type == "error":
-            error_message = content
-            chat_history.add_message("assistant", error_message)
-            return "", [{"role": "user", "content": message}, 
-                       {"role": "assistant", "content": error_message}]
-        
-        file_summary = analyze_file_content(content, file_type)
-        
-        if file_type in ['parquet', 'csv']:
-            system_message += f"\n\n파일 내용:\n```markdown\n{content}\n```"
-        else:
-            system_message += f"\n\n파일 내용:\n```\n{content}\n```"
+    try:
+        if uploaded_file:
+            content, file_type = read_uploaded_file(uploaded_file)
+            if file_type == "error":
+                error_message = content
+                chat_history.add_conversation(message, error_message)
+                return "", history + [[message, error_message]]
             
-        if message == "파일 분석을 시작합니다...":
-            message = f"""[파일 구조 분석] {file_summary}
+            file_summary = analyze_file_content(content, file_type)
+            
+            if file_type in ['parquet', 'csv']:
+                system_message += f"\n\n파일 내용:\n```markdown\n{content}\n```"
+            else:
+                system_message += f"\n\n파일 내용:\n```\n{content}\n```"
+                
+            if message == "파일 분석을 시작합니다...":
+                message = f"""[파일 구조 분석] {file_summary}
 
 다음 관점에서 도움을 드리겠습니다:
 1. 📋 전반적인 내용 파악
@@ -183,24 +186,22 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
 4. ✨ 개선 제안
 5. 💬 추가 질문이나 필요한 설명"""
 
-    messages = [{"role": "system", "content": f"{system_prefix} {system_message}"}]
-    
-    if history is not None:
-        for item in history:
-            if isinstance(item, dict):
-                messages.append(item)
-            elif isinstance(item, (list, tuple)) and len(item) == 2:
-                messages.append({"role": "user", "content": item[0]})
-                if item[1]:
-                    messages.append({"role": "assistant", "content": item[1]})
+        # 시스템 메시지 및 히스토리 설정
+        messages = [{"role": "system", "content": system_prefix + system_message}]
+        
+        # 이전 대화 히스토리 추가
+        if history:
+            for h in history:
+                messages.append({"role": "user", "content": h[0]})
+                if h[1]:
+                    messages.append({"role": "assistant", "content": h[1]})
+        
+        messages.append({"role": "user", "content": message})
 
-    messages.append({"role": "user", "content": message})
-
-    try:
         client = get_client()
         partial_message = ""
-        current_history = []
         
+        # 스트리밍 응답 처리
         for msg in client.chat_completion(
             messages,
             max_tokens=max_tokens,
@@ -211,29 +212,26 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
             token = msg.choices[0].delta.get('content', None)
             if token:
                 partial_message += token
-                current_history = [
-                    {"role": "user", "content": message},
-                    {"role": "assistant", "content": partial_message}
-                ]
+                current_history = history + [[message, partial_message]]
                 yield "", current_history
+
+        # 완성된 대화 저장
+        chat_history.add_conversation(message, partial_message)
         
-        # 완성된 응답 저장
-        chat_history.add_message("assistant", partial_message)
-                
     except Exception as e:
         error_msg = f"❌ 오류가 발생했습니다: {str(e)}"
-        chat_history.add_message("assistant", error_msg)
-        error_history = [
-            {"role": "user", "content": message},
-            {"role": "assistant", "content": error_msg}
-        ]
-        yield "", error_history
+        chat_history.add_conversation(message, error_msg)
+        yield "", history + [[message, error_msg]]
+
 
 with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="GiniGEN 🤖") as demo:
-
+    # 기존 히스토리 로드
+    initial_history = chat_history.format_for_display()
+    
     with gr.Row():
         with gr.Column(scale=2):
             chatbot = gr.Chatbot(
+                value=initial_history,  # 초기 히스토리 설정
                 height=600, 
                 label="대화창 💬",
                 show_label=True,
@@ -267,7 +265,6 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="GiniGEN 🤖") as demo
     gr.Examples(
         examples=[
             ["안녕하세요! 어떤 도움이 필요하신가요? 🤝"],
-            ["이 내용에 대해 좀 더 자세히 설명해 주실 수 있나요? 💡"],
             ["제가 이해하기 쉽게 설명해 주시겠어요? 📚"],
             ["이 내용을 실제로 어떻게 활용할 수 있을까요? 🎯"],
             ["추가로 조언해 주실 내용이 있으신가요? ✨"],
@@ -310,4 +307,4 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="GiniGEN 🤖") as demo
     )
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch()        
