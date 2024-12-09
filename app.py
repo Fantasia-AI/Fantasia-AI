@@ -187,14 +187,6 @@ footer {visibility: hidden}
 
 # UI 구성
 with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", css=css, title="GiniGEN 🤖") as demo:
-    gr.HTML(
-        """
-        <div style="text-align: center; max-width: 800px; margin: 0 auto;">
-            <h1 style="font-size: 3em; font-weight: 600; margin: 0.5em;">AI 어시스턴트 🤖</h1>
-            <h3 style="font-size: 1.2em; margin: 1em;">당신의 든든한 대화 파트너 💬</h3>
-        </div>
-        """
-    )
 
     with gr.Row():
         with gr.Column(scale=2):
