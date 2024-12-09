@@ -138,9 +138,7 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
     if not message:
         return "", history
 
-
     system_prefix = """저는 여러분의 친근하고 지적인 AI 어시스턴트 'GiniGEN'입니다.. 다음과 같은 원칙으로 소통하겠습니다:
-
 1. 🤝 친근하고 공감적인 태도로 대화
 2. 💡 명확하고 이해하기 쉬운 설명 제공
 3. 🎯 질문의 의도를 정확히 파악하여 맞춤형 답변
@@ -151,6 +149,7 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
 이해를 돕겠습니다."""
 
     try:
+        # 파일 업로드 처리
         if uploaded_file:
             content, file_type = read_uploaded_file(uploaded_file)
             if file_type == "error":
@@ -167,7 +166,6 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
                 
             if message == "파일 분석을 시작합니다...":
                 message = f"""[파일 구조 분석] {file_summary}
-
 다음 관점에서 도움을 드리겠습니다:
 1. 📋 전반적인 내용 파악
 2. 💡 주요 특징 설명
@@ -175,10 +173,7 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
 4. ✨ 개선 제안
 5. 💬 추가 질문이나 필요한 설명"""
 
-
-
-    try:
-        # 시스템 메시지 설정
+        # 메시지 처리
         messages = [{"role": "system", "content": system_prefix + system_message}]
         
         # 이전 대화 히스토리 추가
@@ -189,6 +184,7 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
         
         messages.append({"role": "user", "content": message})
 
+        # API 호출 및 응답 처리
         client = get_client()
         partial_message = ""
         
@@ -202,7 +198,6 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
             token = msg.choices[0].delta.get('content', None)
             if token:
                 partial_message += token
-                # Gradio Chatbot 형식으로 히스토리 업데이트
                 current_history = history + [[message, partial_message]]
                 yield "", current_history
 
