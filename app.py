@@ -34,34 +34,25 @@ class ChatHistory:
         self.save_history()
 
     def format_for_display(self):
+        # Gradio Chatbot 컴포넌트에 맞는 형식으로 변환
         formatted = []
         for conv in self.history:
-            formatted.extend([
-                {"role": "user", "content": conv["messages"][0]["content"]},
-                {"role": "assistant", "content": conv["messages"][1]["content"]}
+            formatted.append([
+                conv["messages"][0]["content"],  # user message
+                conv["messages"][1]["content"]   # assistant message
             ])
         return formatted
 
+    def get_messages_for_api(self):
+        # API 호출을 위한 메시지 형식
+        messages = []
+        for conv in self.history:
+            messages.extend([
+                {"role": "user", "content": conv["messages"][0]["content"]},
+                {"role": "assistant", "content": conv["messages"][1]["content"]}
+            ])
+        return messages
 
-    def clear_history(self):
-        self.history = []
-        self.save_history()
-
-    def save_history(self):
-        try:
-            with open(self.history_file, 'w', encoding='utf-8') as f:
-                json.dump(self.history, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"히스토리 저장 실패: {e}")
-
-    def load_history(self):
-        try:
-            if os.path.exists(self.history_file):
-                with open(self.history_file, 'r', encoding='utf-8') as f:
-                    self.history = json.load(f)
-        except Exception as e:
-            print(f"히스토리 로드 실패: {e}")
-            self.history = []
 
 # 전역 ChatHistory 인스턴스 생성
 chat_history = ChatHistory()
@@ -143,10 +134,10 @@ def read_uploaded_file(file):
     except Exception as e:
         return f"❌ 파일 읽기 오류: {str(e)}", "error"
 
-
 def chat(message, history, uploaded_file, system_message="", max_tokens=4000, temperature=0.7, top_p=0.9):
     if not message:
         return "", history
+
 
     system_prefix = """저는 여러분의 친근하고 지적인 AI 어시스턴트 'GiniGEN'입니다.. 다음과 같은 원칙으로 소통하겠습니다:
 
@@ -184,55 +175,57 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
 4. ✨ 개선 제안
 5. 💬 추가 질문이나 필요한 설명"""
 
-        # 시스템 메시지 및 히스토리 설정
+
+
+    try:
+        # 시스템 메시지 설정
         messages = [{"role": "system", "content": system_prefix + system_message}]
         
         # 이전 대화 히스토리 추가
         if history:
-            for h in history:
-                messages.append({"role": "user", "content": h[0]})
-                if h[1]:
-                    messages.append({"role": "assistant", "content": h[1]})
+            for user_msg, assistant_msg in history:
+                messages.append({"role": "user", "content": user_msg})
+                messages.append({"role": "assistant", "content": assistant_msg})
         
         messages.append({"role": "user", "content": message})
 
         client = get_client()
         partial_message = ""
         
-        for msg in client.chat_completion(...):
+        for msg in client.chat_completion(
+            messages,
+            max_tokens=max_tokens,
+            stream=True,
+            temperature=temperature,
+            top_p=top_p,
+        ):
             token = msg.choices[0].delta.get('content', None)
             if token:
                 partial_message += token
-                current_history = history + [
-                    {"role": "user", "content": message},
-                    {"role": "assistant", "content": partial_message}
-                ]
+                # Gradio Chatbot 형식으로 히스토리 업데이트
+                current_history = history + [[message, partial_message]]
                 yield "", current_history
 
+        # 완성된 대화 저장
         chat_history.add_conversation(message, partial_message)
         
     except Exception as e:
         error_msg = f"❌ 오류가 발생했습니다: {str(e)}"
         chat_history.add_conversation(message, error_msg)
-        yield "", history + [
-            {"role": "user", "content": message},
-            {"role": "assistant", "content": error_msg}
-        ]
+        yield "", history + [[message, error_msg]]
 
-
-        
 with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="GiniGEN 🤖") as demo:
     # 기존 히스토리 로드
     initial_history = chat_history.format_for_display()
-    
     with gr.Row():
         with gr.Column(scale=2):
             chatbot = gr.Chatbot(
-                value=[],  # 초기값은 빈 리스트로 설정
+                value=initial_history,  # 저장된 히스토리로 초기화
                 height=600, 
                 label="대화창 💬",
                 show_label=True
-            )
+            )    
+
 
             msg = gr.Textbox(
                 label="메시지 입력",
