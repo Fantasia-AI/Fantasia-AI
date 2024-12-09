@@ -16,7 +16,6 @@ LLM_MODELS = {
     "Meta Llama3.3-70B": "meta-llama/Llama-3.3-70B-Instruct"    # Backup model
 }
 
-# 대화 히스토리를 저장할 클래스
 class ChatHistory:
     def __init__(self):
         self.history = []
@@ -26,7 +25,7 @@ class ChatHistory:
     def add_conversation(self, user_msg: str, assistant_msg: str):
         conversation = {
             "timestamp": datetime.now().isoformat(),
-            "conversation": [
+            "messages": [
                 {"role": "user", "content": user_msg},
                 {"role": "assistant", "content": assistant_msg}
             ]
@@ -34,16 +33,15 @@ class ChatHistory:
         self.history.append(conversation)
         self.save_history()
 
-    def get_recent_conversations(self, limit=10):
-        return self.history[-limit:] if self.history else []
-
     def format_for_display(self):
         formatted = []
         for conv in self.history:
             formatted.extend([
-                [conv["conversation"][0]["content"], conv["conversation"][1]["content"]]
+                {"role": "user", "content": conv["messages"][0]["content"]},
+                {"role": "assistant", "content": conv["messages"][1]["content"]}
             ])
         return formatted
+
 
     def clear_history(self):
         self.history = []
@@ -201,29 +199,28 @@ def chat(message, history, uploaded_file, system_message="", max_tokens=4000, te
         client = get_client()
         partial_message = ""
         
-        # 스트리밍 응답 처리
-        for msg in client.chat_completion(
-            messages,
-            max_tokens=max_tokens,
-            stream=True,
-            temperature=temperature,
-            top_p=top_p,
-        ):
+        for msg in client.chat_completion(...):
             token = msg.choices[0].delta.get('content', None)
             if token:
                 partial_message += token
-                current_history = history + [[message, partial_message]]
+                current_history = history + [
+                    {"role": "user", "content": message},
+                    {"role": "assistant", "content": partial_message}
+                ]
                 yield "", current_history
 
-        # 완성된 대화 저장
         chat_history.add_conversation(message, partial_message)
         
     except Exception as e:
         error_msg = f"❌ 오류가 발생했습니다: {str(e)}"
         chat_history.add_conversation(message, error_msg)
-        yield "", history + [[message, error_msg]]
+        yield "", history + [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": error_msg}
+        ]
 
 
+        
 with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="GiniGEN 🤖") as demo:
     # 기존 히스토리 로드
     initial_history = chat_history.format_for_display()
@@ -231,12 +228,12 @@ with gr.Blocks(theme="Yntec/HaleyCH_Theme_Orange", title="GiniGEN 🤖") as demo
     with gr.Row():
         with gr.Column(scale=2):
             chatbot = gr.Chatbot(
-                value=initial_history,  # 초기 히스토리 설정
+                value=[],  # 초기값은 빈 리스트로 설정
                 height=600, 
                 label="대화창 💬",
-                show_label=True,
-                type="messages"
+                show_label=True
             )
+
             msg = gr.Textbox(
                 label="메시지 입력",
                 show_label=False,
