@@ -1,5 +1,5 @@
 ---
-title: StoryStar
+title: StoryStar 
 emoji: 💬
 colorFrom: yellow
 colorTo: purple
