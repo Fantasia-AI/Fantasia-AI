@@ -1,5 +1,5 @@
 ---
-title: StoryStar 
+title: Fantasia AI
 emoji: 💬
 colorFrom: yellow
 colorTo: purple
@@ -11,4 +11,3 @@ license: apache-2.0
 short_description: Fantasy story generator
 ---
 
-An example chatbot using [Gradio](https://gradio.app), [`huggingface_hub`](https://huggingface.co/docs/huggingface_hub/v0.22.2/en/index), and the [Hugging Face Inference API](https://huggingface.co/docs/api-inference/index).
